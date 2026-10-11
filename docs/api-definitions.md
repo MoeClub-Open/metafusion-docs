@@ -80,14 +80,11 @@ group: "api"
 | 端点 | 用途 / 权限 |
 | --- | --- |
 | `GET /api/catalog/shelves`、`/shelves/feed` | 公开规则与求值后的作品 |
-| `GET /api/catalog/shelves/:slug` | 当前调用者实际使用的完整规则，包含个人覆盖及自建分区；未知、停用或隐藏分区返回 404，非法 slug 返回 400 `invalid_query_param` |
 | `/api/admin/shelves`、`/:id` | 管理货架，需要 `catalog.shelves.manage` |
 | `GET /api/catalog/external-databases` | 可用于 external_ids 的权威库 |
 | `/api/admin/external-databases`、`/:code` | 管理外部库，需要 `catalog.definitions.manage` |
 
 货架 query 支持 tags / fields / vocab_terms / relations：条件间 AND，同数组内 OR。空 query 收录全部已发布 Work。sort 为 `updated`、`created` 或 `title`；名称需四语。
-
-“查看全部”使用 `GET /api/catalog/entities?shelf=<slug>`，保留全部规则及调用者可见性，分页也需携带 shelf。默认音乐货架通过 `vocab_terms.creation_form` 收录 `music`、`song`、`single`、`original_album`、`doujin_album`；主题标签不决定音乐分类。已有实例的种子只补缺失货架，管理员修改规则后才改变存量配置。
 
 权威库登记决定编号与外链是否可用，不自动产生导入适配器。实际导入来源由 `GET /api/importer/sources` 提供，见[新建与编辑](/api-edit)。
 
