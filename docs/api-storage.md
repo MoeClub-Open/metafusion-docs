@@ -156,7 +156,42 @@ DELETE /api/storage/bindings/{binding_id}
 
 绑定表达的是"这份文件是谁的什么用途"；收录位置（页码、时间码、路径）留在目录侧的 `locator`，两处不重复。
 
-同一 `(asset, entity, role)` 只保留一条。解绑用于纠错，绑定创建者、文件上传者或审核者（持 `storage.asset.moderate`）都可以操作。
+同一 `(asset, entity, role)` 只保留一条，重复绑定返回既有的真实绑定 ID，保留创建者与创建时间，并确认继续使用。解绑用于纠错，绑定创建者、文件上传者或审核者（持 `storage.asset.moderate`）都可以操作。
+
+### 目录变更与资产保留
+
+已配置目录与存储生命周期同步的实例，会异步按当前 canonical 身份、完整历史别名、各身份版本及图片资产集合对齐绑定。同步失败会重试，目录保存不等待存储处理；未启用同步的实例不能假定目录变更会自动处置绑定。
+
+| 目录变更 | 绑定行为 |
+| --- | --- |
+| 合并身份 | 全部文件用途迁到 canonical 身份并去重；优先保留既有 canonical 绑定，否则保留一个来源绑定的 ID 与创建信息，历史别名图片资产继续保留 |
+| 删除 canonical 实体 | 撤除该身份和完整历史别名的所有用途绑定 |
+| 修改图片 | 只撤除已移出当前身份及历史别名图片资产集合的 `cover_image` 绑定，不影响音频、原档等其他用途；不会自动创建缺少资产所有者授权的新绑定 |
+| 下架回草稿 | 保留文件绑定 |
+| 修改 TrackContent 收录 | 保留 Track 与 Expression 文件；收录引用不等于资产绑定 |
+
+上传或重复绑定到图片保存之间的新确认会受到保护，旧目录快照不会立即撤除它；图片上传成功后仍须完成目录保存。存量绑定保守保留到该身份下一次目录新写入再复核。
+
+已完成资产在失去最后一个绑定后默认保留 7 天，重新绑定取消计时；从未绑定的 complete 从完成时起算，升级前已有的无绑定资产从迁移时起算。保留期由实例配置，实际到期回收需运维定期运行存储 worker；禁发或仍有任何绑定的资产不回收。多个资产共享同一对象时，只撤除到期资产记录，保留仍被引用的字节。
+
+公开写入还可能返回以下冲突：
+
+| HTTP / error | 处理 |
+| --- | --- |
+| 409 `binding_target_changed` | 身份在读取与绑定写入之间发生合并或删除，重新读取 canonical 身份后再绑定 |
+| 409 `asset_reclaiming` | 资产已进入字节删除阶段，不能重新绑定、续传、完成或禁发来恢复；核对资产状态后重新初始化上传 |
+
+## 自托管封面
+
+先核实图像与目标实体的关系及使用依据，再上传实际图像字节。HTTP 200 与 `image/*` 只能说明传输响应，不能证明图像身份或使用权。
+
+1. 在客户端读取文件，计算 SHA-256 与真实字节数。
+2. 调用 `POST /api/storage/upload/initiate`，提供 `file_name`、`file_size`、`sha256_hash`、`mime_type`，并以 `target_entity_id` 和 `binding_role: "cover_image"` 绑定目标实体。封面用途与目录图片的 `role` 是两个字段。
+3. 若 `is_instant_upload=true`，复用返回的已验证资产；否则把原始字节 PUT 到响应中的 `presigned_urls` 或 `direct_upload_url`，分片方式保留各片 ETag。
+4. 非秒传时调用 `POST /api/storage/upload/complete` 完成并验证摘要；成功后才把资产当作可用图像。未在 initiate 指定绑定时，再调用 `POST /api/storage/bind`，仍用 `binding_role: "cover_image"`。
+5. 在实体 `pictures` 中写入资产 UUID 为 `asset_id`，以实例根地址构造 `/api/storage/assets/{asset_id}/content` 的绝对 URL，并记录真正的来源页面。要作为封面则放在数组首位，DTO 和校验见[图片与自托管封面](/api-edit#图片与自托管封面)。
+
+目录写入和存储上传分别提交，没有跨服务事务。上传成功而目录保存失败时，保留 `asset_id`，按目录错误处理后重用资产；需要撤除误建绑定时使用解绑端点。公开读取仍要求资产 complete、未禁发且至少一个绑定目标可见。
 
 ## 查询与下载
 
@@ -214,6 +249,8 @@ GET /api/storage/download/{asset_id}
 
 ## 限流与审计
 
-网关对业务 API 按 IP 与请求数限流；预签名分片直传由对象存储入口处理。网关 429 可能没有 `Retry-After`，此时采用退避，完整额度说明见[API 概览](/api-overview#限流)。
+存储业务 API 按已验证账号分别维护读、写窗口，各默认 180 次/分钟；匿名按客户端 IP 计数，admin 组免此业务额度。计数仍在存储服务进程内，多副本不共用窗口，也不消耗目录服务的共享预算。超限返回 `429 rate_limited` 与 `Retry-After`，受限响应带 `X-RateLimit-Limit` / `Remaining` / `Reset`。
+
+网关不按共享出口 IP 叠加业务额度。PUT 到存储服务的流式上传计入写窗口；预签名分片直传由对象存储入口处理。各服务限流边界见[API 概览](/api-overview#限流)。
 
 初始化、流式上传、完成、绑定、解绑及禁发治理由存储服务记录操作审计。部署参数与清理策略见[存储运行约定](https://github.com/MoeclubM/MetaFusion/blob/main/docs/architecture/storage-operations.md)，客户端以目标实例响应确认能力。

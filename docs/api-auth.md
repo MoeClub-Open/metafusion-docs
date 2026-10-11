@@ -51,6 +51,7 @@ POST   /api/auth/tokens/introspect       # 下游服务内部调用，不是给�
 - `expires_in_days` 省略或为 0 表示永不过期；负数或超过 3650（10 年）返回 `400 invalid_expiry`。
 - `scopes` 是权限码（`catalog.entity.edit` 这类），不是 `read` / `write` 词表。
 - 每个码须格式合法且创建者当前持有；超出本人权限返回 `scope_not_granted: <code>`，不会静默取交集。
+- 新签发的 PAT 不接受 `*` 或任何以 `.manage` 结尾的权限码，即使本人拥有也返回 `400 forbidden_pat_scope`；管理操作使用具备相应权限的浏览器会话。既有 PAT 不因此自动吊销，有效权限仍按当前账号权限计算。
 - 非法码返回 `invalid_scope: <code>`；重复项去重并保持请求顺序。
 - scopes 必须非空；省略、空数组或去除空白后为空，返回 `invalid_scope: empty`。
 
@@ -242,11 +243,13 @@ PUT /api/admin/users/{id}/ban     # { "banned": false } 解封 → { "ok": true,
 
 账号业务 API 默认读写各 180 次/分钟，已验证账号按用户计数，匿名按 IP；admin 组免业务限流。实例设置 `auth_rate_limit_enabled` / `auth_rate_limit_per_minute` 可覆盖普通账号额度，修改后立即生效。网关不再对业务 API 叠加共享出口 IP 限流。
 
-PAT 内省为服务间热路径，普通令牌 180 次/分钟、来源 IP 18000 次/分钟；内省确认属于当前 admin 组时免这两项限流。未验证令牌不能声称 admin 身份。登录失败保护独立生效，不能通过伪造用户组绕过。
+PAT 内省为服务间热路径，普通令牌 180 次/分钟、来源 IP 18000 次/分钟；内省确认属于当前 admin 组时免这两项限流。未验证令牌不能声称 admin 身份。
+
+登录失败保护使用数据库共享计数，重启与多副本不会清零：15 分钟窗口内同一账号标识失败满 5 次、同一来源 IP 满 20 次后，后续请求返回 `429 login_blocked` 与 `Retry-After`。从第 3 次失败起附加递增延迟，最大 2 秒；成功登录只清除该账号计数，保留 IP 失败记录。计数查询或记账不可用时返回 `503 login_guard_unavailable`。该保护独立于业务 RPM，不能通过伪造用户组绕过。
 
 业务响应提供 `X-RateLimit-Limit` / `Remaining` / `Reset`，超限提供 `Retry-After`；当前计数为进程内固定窗口。
 
-受限 PAT 可调用公共账号资料与已授权的 `/api/admin/*` 管理 API，权限仍为账号现时权限与 scopes 交集，审计凭据类型为 pat。`mcp.connect` 仅用于 MCP 身份验证，不授予业务编辑或管理能力；普通非封禁站内账号可授权该身份能力。登录、口令、自助令牌和第三方 OAuth 授权仍使用浏览器会话。
+受限 PAT 可调用公共账号资料及其 scopes 覆盖的业务 API；既有含管理 scopes 的 PAT 仍按账号现时权限与 scopes 交集验证，审计凭据类型为 pat。`mcp.connect` 仅用于 MCP 身份验证，不授予业务编辑或管理能力；普通非封禁站内账号可授权该身份能力。登录、口令、自助令牌和第三方 OAuth 授权仍使用浏览器会话。
 
 ## 用令牌调用
 

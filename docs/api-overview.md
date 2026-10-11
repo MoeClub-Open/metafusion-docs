@@ -47,6 +47,9 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 读取语义关系与实际收录 | `GET .../:id/relations`、`.../:id/occurrences` | [实体查询与详情](/api-entities) |
 | 读取发行目录、表达组成与版本组 | `GET /api/catalog/releases/:id/toc`、`.../:id/editions`、`GET /api/catalog/expressions/:id/composition` | [实体查询与详情](/api-entities) |
 | 批量表达与对比 | `POST /api/catalog/expressions/details`、`GET /api/catalog/compare` | [实体查询与详情](/api-entities) |
+| 获取可编辑工作副本 | `POST /api/catalog/checkout` | [工作副本与提交](/api-commits) |
+| 预览与原子推送一批修改 | `POST /api/catalog/commits/preview`、`POST /api/catalog/commits` | [工作副本与提交](/api-commits) |
+| 查询提交回执并恢复未知结果 | `GET /api/catalog/commits/:id` | [工作副本与提交](/api-commits#断线与重试) |
 | 新建、编辑、关系与单条收录 | `/api/catalog/entities`、`/relations`、`/tracks/:id/contents` | [新建与编辑](/api-edit) |
 | 合并、停用与下架 | `POST .../:id/lifecycle`、`.../:id/unpublish` | [新建与编辑](/api-edit) |
 | 外部导入与实例交换 | `/api/importer/*`、`/api/exchange/*` | [新建与编辑](/api-edit) |
@@ -80,9 +83,13 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 
 ## 限流
 
-业务 API 默认按账号分别维护读、写两个窗口，各 180 次/分钟；匿名按客户端 IP 分别计数。只读 POST（关系查询、候选、checkout、提交预览等）计入读窗口。目录实例策略仍可按账号、组和全局配置覆盖默认值，多组取最宽松规则；已验证 admin 组免业务 RPM 限流，免限流不免权限校验。
+目录业务 API 默认按账号共用每分钟 180 次的预算，读写合计；匿名按客户端 IP 计数。实体查询、候选、checkout、提交预览和推送等均消耗同一主体的额度，切换路由或 HTTP 方法不会获得额外预算。计数使用数据库固定分钟窗口，目录服务的多个副本共用额度。
 
-受限响应带 `X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`（距重置的秒数）；超限返回 429 与 `Retry-After`。不限时不发窗口头。网关不再按共享出口 IP 限业务请求，避免 MCP 的多个用户相互挤占。当前计数为各服务进程内固定窗口，多副本不能提供全局共享额度。账号内省和登录失败保护见[账号协议](/api-auth#限流)，私信陌生人额度见互动协议。
+实例策略按账号、组和全局配置覆盖默认值，账号规则优先，多组取最宽松规则。admin 组默认无限，显式账号规则或 admin 组规则可收回该默认；免限流不免权限校验。策略维护见[动态定义与配置](/api-definitions#目录限流策略)。
+
+受限响应带 `X-RateLimit-Limit`、`X-RateLimit-Remaining`、`X-RateLimit-Reset`（距重置的秒数）；超限返回 429 与 `Retry-After`。不限时不发窗口头。共享计数不可用返回 `503 rate_limit_unavailable`，不能把数据库故障当作不限流。
+
+各服务维护自己的预算，不提供跨账号、互动、目录和存储的全站共同桶。网关不按共享出口 IP 叠加业务额度；账号业务额度、内省与登录失败保护见[账号协议](/api-auth#限流)，互动和私信额度见[社区协议](/api-community#限流策略)，存储范围见[存储协议](/api-storage#限流与审计)。
 
 ## 常见错误处理
 
@@ -91,13 +98,16 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 400 `invalid_payload` | 核对字段、参数与当前 schema，避免重放同一错误载荷 |
 | 400 `invalid_limit` / `invalid_offset` / `invalid_page` / `pagination_conflict` | 修正分页值，避免组合互斥参数 |
 | 400 `invalid_reference` | 核对 kind、归属、可见性与合并身份 |
-| 400 `evidence_required` / `invalid_source` | 补充修改说明与可核验来源 |
+| 400 `evidence_required` / `invalid_source` / `source_not_eligible` | 补充修改说明与可核验来源；新证据不能使用本站自身页面或 `self` |
+| 400 `invalid_external_key` / `invalid_external_category` / `invalid_external_id` | 按实例注册表核对外部库码、实体种类与编号格式，见[新建与编辑](/api-edit#外部标识) |
 | 401 `authentication_required` / `invalid_token` | 获取有效凭据；PAT 不会因失效退为匿名 |
 | 403 `forbidden` | 核对账号权限、令牌 scopes 与条目可写范围 |
 | 404 `not_found` | 不存在或不可见，不能进一步区分 |
 | 409 `version_conflict` | 回读并合并修改，再用最新版本或 ETag 提交 |
 | 409 `idempotency_conflict` | 同一幂等键对应了不同载荷；核对任务身份，勿盲目换键重复创建 |
+| 409 `commit_conflict` / `definitions_conflict` / `identity_candidates_changed` | 回读并重新审查字段、定义或身份候选；提交错误和恢复步骤见[工作副本与提交](/api-commits#机器错误码) |
 | 429 `rate_limited` | 按 Retry-After 等待，减少并发与重复请求 |
+| 503 `rate_limit_unavailable` | 共享计数依赖不可用；等待恢复，不作为无限额度或零计数 |
 | 5xx | 视为服务或依赖故障；不能当作实体缺失或零命中 |
 
 写入与关系的具体语义错误见[新建与编辑](/api-edit)，Agent 的处理策略见[AI Agent API 与工具规范](/api-agent)。

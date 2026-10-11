@@ -29,7 +29,7 @@ group: "api"
   "edit_note": "根据官方目录补充题名与表达",
   "sources": [{"kind":"url","citation":"官方目录支持题名和层级","url":"https://example.org/catalog"}],
   "operations": [
-    {"target":"entity","action":"update","id":"<实体 UUID>","base_version":3,
+    {"target":"entity","action":"update","id":"<实体 UUID>","base_version":3,"reviewed_candidate_ids":[],
      "patch":[{"path":"/translations/zh-CN/title","value":"中文题名"}]},
     {"target":"entity","action":"create","ref":"recording","reviewed_candidate_ids":[],
      "document":{"kind":"expression","title":"录音","work_id":"<Work UUID>"}}
@@ -41,13 +41,15 @@ group: "api"
 
 Patch 路径使用 JSON Pointer：`~` 编码为 `~0`，`/` 编码为 `~1`。`value:null` 是显式空值，`remove:true` 是移除键，两者不可同时提供。对象字段可逐键编辑，数组整组处理；不支持数组下标，不允许同一批 patch 中出现祖先与子路径。实体可编辑字段以实例 OpenAPI 与动态 definitions 为准，ID、kind、版本及 Work/Release/Medium 归属不能通过 patch 改写。关系只可编辑 position、attributes，不能改端点和关系码。
 
-## 创建前的身份复核
+## 创建与身份更新的复核
 
-实体 create 必须提供 `reviewed_candidate_ids`，空数组表示已审查且无候选。服务端用题名、各语言题名和外部 ID 构造 candidates 查询，按 Work（Expression/ContentUnit）、Release（Medium）或 Medium（Track）限定作用域；不加入 duration 等容易产生大量命中的弱条件。先用相同条件的 [candidates 查询](/api-entities#并发编目的查重候选)读取 canonical ID 并核来源。有候选时优先复用，确认为不同对象才能列入已审查数组并说明理由。
+实体 create 和身份字段 update 必须提供 `reviewed_candidate_ids`，空数组表示已审查且无候选。身份 patch 包括 `/title`、`/external_ids` 及其子路径，以及 `/translations` 整组、`/translations/<locale>` 整行或 `/translations/<locale>/title`。只改非身份字段的 update 和关系操作不接受该数组。
 
-新作用域用本批分配的 ID；需要明确区分本批先创建的同名对象时，审查数组可用 `@local:ref名称`。同一身份条件的 commit 创建会争用相应事务锁，后到者看到候选集合改变时整批返回 `409 identity_candidates_changed`，不会静默再建一条。候选截断或 canonical 未解析同样阻断创建。
+服务端用最终题名、各语言题名和外部 ID 构造 candidates 查询，按 Work（Expression/ContentUnit）、Release（Medium）或 Medium（Track）限定作用域；不加入 duration 等容易产生大量命中的弱条件。更新以三方合并后的文档复核，排除当前实体的 canonical 身份及归于它的历史别名。先用相同条件的 [candidates 查询](/api-entities#并发编目的查重候选)读取 canonical ID 并核来源。有候选时优先复用，确认为不同对象才能列入已审查数组并说明理由。
 
-这是当前可见候选集合的复核，不是“同名即同实体”的唯一约束。普通交互式单实体创建、导入和身份更新使用各自接口；此锁不使那些入口自动获得提交协议的审查条件。私有对象不能由查重暴露，来源判断也不能由标题匹配代替。
+新作用域用本批分配的 ID；需要明确区分本批先创建的同名对象时，审查数组可用 `@local:ref名称`。创建与身份更新共同协调并发身份条件，看到候选集合与审查结果不一致时整批返回 `409 identity_candidates_changed`，不会静默再建或改出一条。响应中的 `identity_review` 含 `operation`（从 0 起）与当前 `candidate_ids`。候选截断或 canonical 未解析同样阻断写入。
+
+这是当前可见候选集合的复核，不是“同名即同实体”的唯一约束。公开单实体 POST / PUT 同样复核身份，`reviewed_candidate_ids` 省略时按空数组处理；无候选的旧客户端继续可用，有候选时需明确审查后提交。导入使用自己的身份策略并参加共同的身份协调。私有对象不能由查重暴露，来源判断也不能由标题匹配代替。
 
 ## 合并与冲突
 
@@ -65,8 +67,34 @@ Patch 路径使用 JSON Pointer：`~` 编码为 `~0`，`/` 编码为 `~1`。`val
 
 固定提交 ID 是持久幂等键。同一操作者、ID 和载荷返回首个回执；同 ID 不同内容或不同操作者返回 `409 idempotency_conflict`。不要改 ID 后重建同一批数据。查询回执的 404 可能表示请求仍在执行，不能据此断言失败；可用同 ID、同载荷再次 push，由服务端协调并发请求。
 
-已明确拒绝的提交可重新 checkout、审查冲突并 rebase，生成新提交 ID，保留旧本地提交。未知结果必须先查回执，不能 rebase。回执持久保留，不按创建接口的短期幂等窗口清除。
+已明确拒绝的提交可重新 checkout、审查冲突并 rebase，生成新提交 ID，保留旧本地提交。未知结果必须先查回执，不能 rebase。提交 ID、操作者、载荷摘要、结果与修订关联永久保留，回执不会按年龄清除；原始请求默认 90 天后裁剪，同 ID、同载荷仍可恢复首个结果。
 
-推送默认预算 60 次/分钟，预览 30 次/分钟，checkout 120 次/分钟；实例配额可能覆盖这些默认值。服务端提交期限 15 秒、锁等待 3 秒，失败后按机器码与回执判断结果。批量减少请求数，不保证任意大小的关系图都能在期限内提交。
+checkout、预览、推送及回执读取与其他目录请求共用默认 180 次/分钟预算，读写合计，实例策略可覆盖；多副本共享计数，见[限流](/api-overview#限流)。服务端提交期限 15 秒、锁等待 3 秒，失败后按机器码与回执判断结果。批量减少请求数，不保证任意大小的关系图都能在期限内提交。
 
 数据库明确回滚的序列化失败、死锁或锁等待超时由服务端重新执行整个事务，最多 16 次尝试，仍受 15 秒期限限制；提交 ID 和请求不变。耗尽尝试返回 `503 {"error":"transaction_busy","applied":false}` 与 `Retry-After: 1`。这仅证明本次请求未应用；若此前同 ID 请求断线且结果未明，仍须查回执，不能凭后一次失败创建新提交。客户端保留提交，稍后显式推送同 ID、同载荷；连接断开和其他 5xx 不自动重放写请求。
+
+## 机器错误码
+
+下表补充提交与 checkout 的错误；实体字段、来源、权限与可见性仍沿用[新建与编辑](/api-edit)和[API 概览](/api-overview)。400 表示载荷需修正，不能原样自动重试。
+
+| HTTP / error | 处理 |
+| --- | --- |
+| 400 `invalid_checkout_size` / `duplicate_checkout_id` / `invalid_id` | 合计最多 100 个规范 UUID，同一 ID 只出现一次 |
+| 400 `invalid_commit_id` / `definitions_etag_required` / `invalid_commit_size` | 使用固定规范 UUID、checkout 的定义基线和 1–100 个操作 |
+| 400 `invalid_commit_target` / `invalid_commit_action` | target 为 entity/relation，action 为 create/update |
+| 400 `invalid_create_operation` / `invalid_update_operation` / `duplicate_commit_target` | 核对 ref、ID、base_version、document/patch；同批一个目标只能编辑一次 |
+| 400 `identity_review_required` / `invalid_identity_review` | 创建或身份更新须带审查数组；其余操作不能带，审查项需为合规候选身份 |
+| 400 `identity_candidates_incomplete` / `identity_candidate_unresolved` | 收窄候选条件或修复身份解析，不能把不完整集合当作没有重复 |
+| 400 `invalid_document` / `server_fields_forbidden` | 使用严格 document DTO，不声明服务端 ID、version、created_by 或 redirect_id |
+| 400 `invalid_local_reference` | 使用 `{"$ref":"此前创建的 ref"}`，检查依赖顺序与目标是否存在 |
+| 400 `invalid_patch_path` / `invalid_commit_patch` / `overlapping_patch_paths` / `patch_requires_object` | 修正 JSON Pointer、value/remove 与对象层级；不编辑数组下标或重叠路径 |
+| 400 `base_revision_missing` | 服务端找不到指定的权威基线；重新 checkout 并重新形成修改 |
+| 400 `use_track_contents_endpoint` | 隐藏收录不能整体 patch，改用单条收录端点；其余稀疏修改可保留完整历史事实 |
+| 400 `commit_incomplete` | 无法恢复已存提交的完整结果；保留原 ID 与载荷，报告服务异常 |
+| 409 `commit_conflict` | 按 conflict.paths 比较双方改动，重新取舍后 rebase |
+| 409 `definitions_conflict` | 重新读取定义和工作副本，核对字段契约 |
+| 409 `identity_candidates_changed` | 按 identity_review 的当前 canonical 候选重新审查；整批未应用 |
+| 409 `idempotency_conflict` | 同 ID 已属于另一操作者或另一载荷，勿改 ID 盲目重建 |
+| 503 `transaction_busy` | 本次明确未应用；按 Retry-After 重试同 ID，此前未知请求仍先查回执 |
+
+回执的 `applied` 表示服务端结果，不等于客户端工作副本已刷新。推送成功后应核对回执并更新基线；封存后的追加编辑须与回读内容合并，不能直接覆盖或丢弃。

@@ -52,9 +52,12 @@ group: "api"
 "sources": [{ "kind": "url", "citation": "官方商品页", "url": "https://example.com/item" }]
 ```
 
-- `kind` 只接受 `url` / `publication` / `self`
+- 新证据的 `kind` 只接受 `url` / `publication`；`self` 返回 `400 source_not_eligible`
 - `citation` 不能为空
-- `url` 只要是链接就必须合法（`400 invalid_source`）
+- `kind=url` 必须提供有效 URL；`publication` 可用出版物与页码而不带 URL，所带链接仍须有效（`400 invalid_source`）
+- 指向目标实例自身及其子域的证据 URL 返回 `400 source_not_eligible`。本站页面不能作为本站事实的独立证据；图片字节的站内存储地址仍可写在 `pictures[].url`。
+
+新增或改动图片、收录的来源也按此要求检查；未改变的历史来源可保留，历史修订不会随新规则清洗。来源资格不按“社区网站”一律排除，是否足以支持具体字段仍须逐项判断。
 
 ## 实体引用格式
 
@@ -96,6 +99,46 @@ POST /api/catalog/entities
 - 创建实体与关系可带 `Idempotency-Key`，键按操作、用户和请求键区分。
 - 同键同载荷重放首创响应；同键不同载荷返回 `409 idempotency_conflict`。
 - 幂等记录与业务写入在同一数据库事务提交，可跨进程重启和副本复用。新的逻辑操作使用新的键；不确定是否成功时重试原载荷和原键。
+- 单实体 POST / PUT 可在顶层提供 `reviewed_candidate_ids`。省略按空数组复核；创建或改变身份时，当前可见候选与审查集合不一致返回 `409 identity_candidates_changed`，响应含 `identity_review: {operation: 0, candidate_ids: [...]}`。先核对 canonical 候选再明确提交，身份字段与共同并发协调见[工作副本与提交](/api-commits#创建与身份更新的复核)。
+
+### 图片与自托管封面
+
+`pictures` 是有序数组，最多 40 张。首项就是封面，服务端不重排；`role`、时间与版本名称不会自动选择封面。更换封面应调整数组顺序。
+
+```json
+{
+  "url": "https://example.org/api/storage/assets/018f4d3a-2b1c-7def-8a90-123456789abc/content",
+  "asset_id": "018f4d3a-2b1c-7def-8a90-123456789abc",
+  "caption": {"zh-CN": "发行封面"},
+  "role": "cover_art",
+  "taken_at": "2026-10",
+  "version_label": {"zh-CN": "2026 年版"},
+  "usage_period": {"begin": "2026-10-01"},
+  "source": {"kind": "url", "citation": "官方发行页的封面", "url": "https://publisher.example/releases/123"}
+}
+```
+
+示例中的 `role` 须先在目标实例 `definitions.vocabularies.picture_role` 中确认。各字段含义：
+
+| 字段 | 契约 |
+| --- | --- |
+| `url` | 必填的有效图片 URL；同一实体不能重复使用同一 URL |
+| `source` | 必填的图片来源，遵循上文证据规则；存储地址与来源页面分别记录 |
+| `caption` / `version_label` | 按语言码保存说明 / 图像版本名称；后者不是实体 version |
+| `role` | 可省略；有值时必须为 `picture_role` 词表项码 |
+| `taken_at` | 可省略；允许年、年月、完整日期或 RFC3339 时间，仅作图像时间信息 |
+| `usage_period` | 可省略；填写时 begin/end 至少有一端，支持部分日期，包含两端，结束不能早于开始；可与其他图片使用期重叠 |
+| `asset_id` | 自托管资产的 UUID；外链图可省略。目录服务只检查格式，写入方须先完成存储上传和 `cover_image` 绑定 |
+
+图片校验错误为 `400 too_many_pictures`、`duplicate_picture`、`invalid_picture`、`invalid_picture_time`、`invalid_picture_period`、`invalid_picture_asset`；用途词表不存在或词项非法分别返回 `unknown_vocabulary`、`invalid_term`。自托管上传的完整步骤见[存储上传与下载](/api-storage#自托管封面)。
+
+### 外部标识
+
+`external_ids` 是外部库码到编号的对象。写入前读取 `GET /api/catalog/external-databases`，按当前 `category` 和 `validation_regex` 选择键与值：`category=all` 适用于所有 kind，其余分类必须等于实体的 kind。未知码返回 `400 invalid_external_key: <code>`，分类不匹配返回 `400 invalid_external_category: <code>`，空值、超长或不满足格式返回 `400 invalid_external_id: <code>`。
+
+值不统一假定为裸编号：例如 `official_website`、`fandom`、`moegirlpedia` 保存完整 URL，其他码按注册表规则填写。`url_pattern` 只决定展示链接，展开后须为绝对 HTTP(S) URL；没有可跳转地址的条码仍可作为文本标识。权威库登记不代表存在抓取适配器，导入来源以 `/api/importer/sources` 为准。
+
+哔哩哔哩标识应按语义选 `bilibili_bangumi`（Work，`ss`）、`bilibili_media`（Work，`md`）、`bilibili_episode`（ContentUnit，`ep`）、`bilibili_video`（ContentUnit，`BV` / `av`）。旧 `bilibili` 泛码默认停用，保留兼容历史及显式写入；停用仅隐藏可选预设，不能作为服务端拒绝所有写入的保证。
 
 ### 层级与归属字段
 
@@ -128,6 +171,8 @@ PUT 是整实体替换，不是局部 PATCH：先 `GET /api/catalog/entities/:id
 :::
 
 Track 整体写入时，每条 `contents[].sources` 未提供或为 `null` 都会继承本次编辑的顶层 `sources`，即使该收录的其他字段未改变。要保留既有逐条证据，须将回读的 `contents[].sources` 数组显式带回；服务端不会按旧条目自动补回。
+
+详情可能过滤调用者不可见的收录。没有 `catalog.lifecycle.manage` 时，整体 PUT 若遗漏或改变隐藏收录会返回 `403 forbidden`，防止把裁剪后的读取结果当作完整事实覆盖。修改可见收录使用单条收录端点，仅改状态使用专用 PATCH，题名或属性等字段可用[提交协议](/api-commits)的稀疏 patch。
 
 - `expected_version` 与当前版本不一致返回 `409 version_conflict`：重读后再写，不要盲目重试
 - 发布时写 `status: "published"`，至少带一条 `translations`，否则 `400 translation_required`；Track 仅改状态使用下面的专用 PATCH
@@ -268,12 +313,14 @@ GET /api/catalog/entities/:id/revisions
 
 | 端点 | 作用 |
 |---|---|
-| `POST /api/importer/preview` | 按 URL / ID 出站抓取并返回结构化预览，限流 10/分钟 |
-| `GET /api/importer/sources` | 列出真有适配器的来源，供导入弹窗取选项；只读注册表、不出站抓取，因此不限流 |
+| `POST /api/importer/preview` | 按 URL / ID 出站抓取并返回结构化预览 |
+| `GET /api/importer/sources` | 列出真有适配器的来源，供导入弹窗取选项；只读注册表、不出站抓取 |
 | `POST /api/importer/import` | 按预览载荷落库：作品 → 发行 → 载体 → 曲目 → 关系逐次保存 |
 
 ::: warning 注意
 `import` 的每条实体各自一个事务：中途失败不会回滚已写入的前序实体，所以落库前的零写入预检才是整体防线。
+
+三个端点均计入目录的共享默认 180 次/分钟预算，读写合计；来源清单只读也消耗额度，见[限流](/api-overview#限流)。
 :::
 
 - Bangumi 预览含分集分页，详情抓取 ≤8 并发；DLsite/DMM 读取商品页生成 Work 与数字发行预览，不等同于 Bangumi 的分集和角色关系抓取
@@ -284,6 +331,8 @@ GET /api/catalog/entities/:id/revisions
 - `has_release=true` 时必须带 `mediums`；缺少时返回 `400 invalid_payload: has_release=true requires mediums`。其他非 `append_release_to_work` 模式带非空发行对象但无载体时，返回 `400 invalid_payload: release requires mediums`。无载体发行应明确使用 `append_release_to_work` 并按该模式构造载荷。
 - `merge_translations` 会被显式拒绝，补译名走常规编辑
 - 落库前做零写入预检：属性值、未知字段码、`original_language`、翻译行与日期字段都按已发布定义校验，规则与实体写入一致
+- import 必须以 `source_urls` 提供合格来源；空数组或全部不是有效 URL 返回 `400 evidence_required`，本站 URL 返回 `400 source_not_eligible`，不自动生成本站 `self` 证据。`edit_note` 可提供明确说明，省略时由来源与 URL/ID 生成导入说明
+- 图书 infobox 的有效 ISBN-10 转为 ISBN-13 时重算校验位，ISBN-13 去除分隔符；非法 ISBN 只保留原文，不派生发行条码。显式发行 barcode（含 work.fields.barcode 的发行兜底）为 ISBN-10 或 GTIN-8/12/13/14 形态时，预检检查校验位，失败分别返回 `400 invalid_isbn` / `invalid_barcode` 且零写入；合法的显式 ISBN-10 保持调用者原值，专有文本条码不猜制式
 - 没有落库位置的载荷字段以 `unsupported_field_for_entity_type` 明确拒绝，不静默丢弃
 - Bangumi 导入会拉取条目的演职员与角色：语义明确的职位映射到精确关系码（如 `directed_by` / `photographed_by` / `voiced_by`）
 - 没有精确映射的职位落 `credit_for` 并把职位原文写进 `credit_role`

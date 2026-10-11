@@ -67,9 +67,33 @@ target_type 为八种实体 kind。切换前验证目标种类与可见性，并
 
 GET 会话不自动标记已读；只有收件人能标记自己的未读，重复调用 marked=0。自己发出的消息不计入未读。
 
-正文去空白后需 1–4000 字符，不能向自己发信。发送按账号令牌桶限频，容量 20、每分钟回满；陌生人新会话另有容量 5、每小时回满的额度，两者均需满足，超限返回 429 和 Retry-After。收件设置控制陌生人的新会话，PUT 必须明确传入布尔字段；设置属于本人，不能读写他人设置。
+正文去空白后需 1–4000 字符，不能向自己发信。发送默认按账号令牌桶限频，容量 180、每分钟回满；陌生人新会话另有容量 5、每小时回满的额度，两者均需满足。计数由互动服务数据库共享，超限返回 429 和 Retry-After。容量及管理员默认豁免可配置，见下文限流策略。收件设置控制陌生人的新会话，PUT 必须明确传入布尔字段；设置属于本人，不能读写他人设置。
 
 非 UUID 的对方 ID 返回 404，未登录返回 401。对方账号引用不在互动服务跨库验证，收件受限时返回 `403 recipient_not_accepting_messages`。
+
+## 限流策略
+
+互动服务的所有业务 API 默认每账号 180 次/分钟，读写合计；匿名按客户端 IP 计数。API 使用数据库固定分钟窗口，多副本共享；私信还需满足上述独立令牌桶。额度不与目录、账号或存储服务共用。
+
+受限响应提供 `X-RateLimit-Limit` / `Remaining` / `Reset`，超限返回 `429 rate_limited` 与 `Retry-After`；策略或共享计数不可用返回 `503 rate_limit_unavailable`。admin 组默认无限，可通过账号或组策略收回；私信的管理员豁免由 `messages.admin_unlimited` 单独控制。
+
+持 `community.rate_limits.manage` 使用 `GET|PUT /api/community/admin/rate-limits`。GET 返回 `{etag, policy, messages, updated_at, updated_by?}`；PUT 完整替换两类策略：
+
+```json
+{
+  "expected_etag": "<GET 返回值>",
+  "policy": {
+    "default_per_minute": 180,
+    "default_unlimited": false,
+    "groups": {"admin": {"unlimited": true}},
+    "accounts": {}
+  },
+  "messages": {"send_per_minute": 180, "stranger_per_hour": 5, "admin_unlimited": true},
+  "edit_note": "调整互动服务额度"
+}
+```
+
+示例表示默认配置，修改前从 GET 的完整策略编辑。账号规则按 ID、用户名顺序匹配且优先于组；多组取最宽松，再回落全局。匿名使用保留组 `anonymous`。`edit_note` 可省略，最多 4000 字符，不要求 `sources`。过期或缺失 ETag 返回 `409 conflict`，非法额度、规则键或缺少 policy/messages 返回 `400 invalid_rate_limit`。该端点只治理互动服务；目录策略仍走 `/api/admin/rate-limits`。
 
 ## 站内通知
 

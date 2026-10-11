@@ -38,7 +38,7 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | `created_by` / `created_at` / `updated_at` | 创建者与时间 |
 | `redirect_id` | 合并后的目标，由生命周期操作维护 |
 
-图片可以记录多语言说明、用途、版本名称、使用期与存储资产 ID。完整形状以目标实例的 OpenAPI 为准。
+图片可以记录多语言说明、用途、版本名称、使用期与存储资产 ID。字段与数量校验见[图片与自托管封面](/api-edit#图片与自托管封面)，完整形状以目标实例的 OpenAPI 为准。
 
 动态属性的可写范围由 `fields.<code>.applicable_kinds` 声明；空集合表示只用于关系或内嵌结构。标签不会扩大字段权限。动态定义规则见[动态定义与配置](/api-definitions)。
 

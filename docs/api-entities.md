@@ -105,7 +105,7 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 
 响应包含 `items`、`total`、`complete`、`basis="postgres_repeatable_read"`。每项含 `matched` 原始实体摘要和 `canonical` 保留实体摘要；不能解析时 `canonical=null` 并带 `resolution_error`。摘要不能用于实体 PUT。
 
-`total` 是该快照中命中的原始实体数；`limit` 为 1–1000，默认 1000。超过上限时 `complete=false`，应收窄过宽条件，不能把部分结果当成没有重复。查询仅覆盖调用者可见范围，排除已删除原始实体；零候选不证明不可见范围内没有重复。默认额度为每账号或客户端 IP 每分钟 120 次。
+`total` 是该快照中命中的原始实体数；`limit` 为 1–1000，默认 1000。超过上限时 `complete=false`，应收窄过宽条件，不能把部分结果当成没有重复。查询仅覆盖调用者可见范围，排除已删除原始实体；零候选不证明不可见范围内没有重复。候选查询与其他目录请求共用每账号或匿名客户端 IP 每分钟 180 次的默认预算，见[限流](/api-overview#限流)。
 
 创建前使用此接口查重，不用跨页扫全库，也不靠关键词搜索的异步索引证明实体不存在。候选查询不锁定后续创建；多个 Agent 仍应分配不同任务范围，已存在身份应复用，创建结果未知时保留原幂等键并先核对结果。
 

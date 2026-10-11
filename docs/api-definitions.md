@@ -105,4 +105,6 @@ group: "api"
 
 PUT 使用 `{policy, expected_etag, edit_note, sources}`。policy 可配置全局 `default_per_minute` / `default_unlimited`，以及 groups / accounts 的 `per_minute` / `unlimited`。保留组 `anonymous` 对应匿名请求。
 
-账号规则优先于组，多组取最宽松，再回落全局与路由默认。该配置拥有独立 ETag，不改变目录定义。计数与客户端退避见[API 概览](/api-overview)。
+账号规则优先于组，多组取最宽松，再回落全局与默认 180 次/分钟。admin 组没有显式规则时默认无限；给具体管理员配置 accounts 规则，或显式配置 groups.admin，可收回该默认。若还有其他更宽松组，仍遵循多组取最宽松规则；需精确限制某人时使用账号规则。
+
+所有目录业务读写消耗同一个账号或匿名 IP 的数据库共享窗口，多副本共用计数。该配置拥有独立 ETag，不改变目录定义；它不配置账号、社区或存储服务的预算。计数与客户端退避见[API 概览](/api-overview#限流)。
