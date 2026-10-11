@@ -27,6 +27,7 @@ GET /api/catalog/entities?kind=medium&release_id=<release_id>
 | `kind` | 单个 kind 过滤 |
 | `kinds` | 多值 kind（重复出现或逗号分隔，命中任一即返回） |
 | `status` | 状态过滤（`draft` / `pending_review` / `published` …）；可见性另见 [API 概览](/api-overview) |
+| `shelf` | 首页分区 slug；按当前调用者的完整规则筛选 Work，包含个人覆盖及自建分区，并与其他条件取交集。未知、停用或隐藏分区返回 404；非法 slug 返回 400 `invalid_query_param`。规则含 relations 时不能与 q 组合 |
 | `original_language` / `has_pictures` | 原始语言精确筛选 / `has_pictures=1` 仅返回有图实体 |
 | `q` | 关键词查询，匹配、索引计数与分页见[检索](/api-search) |
 | `field` + `value` | 按 `document` 内属性字段精确过滤（支持点分路径，见下） |

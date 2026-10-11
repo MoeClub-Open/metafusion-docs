@@ -15,6 +15,8 @@ group: "api"
 
 q 可以和当前列表过滤组合：kind / kinds、status、tags（通过 tags_mode 选择任一或全部匹配）、original_language、has_pictures、固定归属 ID，以及 field + value 的精确属性筛选。嵌套组、列表和收录伪字段按 definitions 的搜索声明校验。完整参数见[实体查询与详情](/api-entities)。
 
+`shelf=<slug>` 保留当前调用者的首页分区规则，也可与 q 组合。关系存在性未进入搜索索引，因此规则含 `relations` 时组合 q 返回 400 `invalid_query_param`，须去掉关键词再浏览。规则或个人覆盖变更会使旧 cursor 的查询绑定失效，需重新开始搜索。
+
 q 等文本参数最多 256 字节，须为合法 UTF-8；除制表符外的控制字符会被拒绝。客户端应使用 URL 编码，不手工拼接关键词。
 
 ```http
