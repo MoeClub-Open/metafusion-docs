@@ -83,6 +83,7 @@ group: "api"
 | 情况 | Agent 动作 |
 | --- | --- |
 | 400 载荷、字段、词项或来源校验失败 | 用当前 OpenAPI / definitions 与来源改正输入，不用近似值绕过校验 |
+| `source_refs_required` / `source_key_required` / `source_unused` | 补齐来源 `key` 与每操作 `source_refs`；旧提交格式无兼容，见[工作副本与提交](/api-commits) |
 | `invalid_reference` 或身份已合并 | 回读引用并解析身份，核对允许层级、可见性与[UUID 格式](/api-edit#实体引用格式) |
 | `four_locale_names_required` | 补齐定义名称所缺的语言，不通过停用条目规避校验 |
 | `immutable_scope`、结构或收录约束失败 | 修正建模计划；补齐发行声明后再提交收录，不能原地换不可变归属 |
