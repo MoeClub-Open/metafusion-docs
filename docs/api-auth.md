@@ -85,7 +85,7 @@ Authorization: Bearer mfp_…
 
 PAT 可用于下游服务，仍受账号现时权限与 scopes 限制：
 
-- 目录：`/api/` 的兜底前缀，含 `/api/catalog/*`、`/api/importer/*`、`/api/exchange/*`
+- 目录：`/api/` 的兜底前缀，含 `/api/catalog/*`、`/api/external-sources/*`、`/api/exchange/*`
 - 互动：`/api/community/*` 等
 - 存储：`/api/storage/*`
 

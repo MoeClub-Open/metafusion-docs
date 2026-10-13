@@ -52,7 +52,7 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 查询提交回执并恢复未知结果 | `GET /api/catalog/commits/:id` | [工作副本与提交](/api-commits#断线与重试) |
 | 新建、编辑、关系与单条收录 | `/api/catalog/entities`、`/relations`、`/tracks/:id/contents` | [新建与编辑](/api-edit) |
 | 合并、停用与下架 | `POST .../:id/lifecycle`、`.../:id/unpublish` | [新建与编辑](/api-edit) |
-| 外部导入与实例交换 | `/api/importer/*`、`/api/exchange/*` | [新建与编辑](/api-edit) |
+| 外部来源查询与实例交换 | `/api/external-sources/*`、`/api/exchange/*` | [新建与编辑](/api-edit) |
 | 定义、货架与外部库配置 | `/api/admin/catalog-definitions`、`/shelves`、`/external-databases` | [动态定义与配置](/api-definitions) |
 | 收藏、讨论、私信与举报 | `/api/community/*`、`/api/favorites/*`、`/api/messages/*` | [社区与互动 API](/api-community) |
 | 上传、绑定和读取文件 | `/api/storage/*` | [存储上传与下载](/api-storage) |
