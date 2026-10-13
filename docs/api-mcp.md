@@ -43,7 +43,7 @@ MCP 授权撤销后下一次请求被拒绝，正在执行的请求可能完成�
 | metafusion_commit_preview / commit_push | 直接传入完整原生提交载荷 |
 | metafusion_file_inspect / upload | 根据 Agent 提供的 URL 或内容，在云端计算摘要、上传并绑定文件 |
 
-动态字段仍以 definitions 为准，分页、冲突码和失败结果沿用原生 API。普通编目先查候选、checkout、构造提交、preview，再显式 push；封存载荷保留 30 天。未知推送结果用同 ID 查回执；真实冲突需重新取舍和 rebase，见[提交协议](./api-commits.md)。
+动态字段仍以 definitions 为准，分页、冲突码和失败结果沿用原生 API。普通编目先查候选、checkout、构造提交、preview，再显式 push；封存载荷保留 30 天。提交证据：每条 source 必须有唯一 `key`，每个操作必须有 `source_refs`（旧格式无兼容，见[提交协议](./api-commits.md)）。未知推送结果用同 ID 查回执；真实冲突需重新取舍和 rebase。
 
 文件 URL 必须是服务端可访问的公开 HTTPS 地址。URL 文件上限 1 GiB；base64 受 8 MiB 请求体上限约束。工具失败时保留 asset_id，检查原生存储状态后再处理。
 

@@ -7,6 +7,12 @@ group: "legal"
 
 # 更新日志
 
+## 2026-10-14 — 提交来源必填与质量轨号
+
+- **破坏性变更：** [工作副本与提交](/api-commits) 要求每个 `sources[]` 带唯一 `key`，每个操作带非空 `source_refs`。旧格式（无 key / 无 `source_refs`）以 `source_refs_required`、`source_key_required`、`source_unused` 等结构化 400 拒绝，**无兼容模式**；客户端与 Agent 技能必须升级。
+- 缺 `source_refs` 的响应形如 `{"error":"source_refs_required","applied":false,"operation":<从0起>}`，便于定位出错操作。
+- 质量审计：同一 medium 内顶层曲目序号必须从 1 连续；从 2 起或缺轨返回 `partial` + `track_position_gap`（见 `/entities/{id}/quality`）。
+
 ## 2026-10-11 — 提交、来源与服务额度
 
 - [工作副本与提交](/api-commits)记录 checkout、原子批次、三方合并、预览与持久回执；创建和身份更新都需复核候选，原始请求裁剪不影响长期幂等恢复。

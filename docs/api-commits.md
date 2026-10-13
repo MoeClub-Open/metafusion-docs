@@ -27,15 +27,21 @@ group: "api"
   "id": "019a0e47-6190-7000-8000-000000000001",
   "definitions_etag": "<checkout 返回值>",
   "edit_note": "根据官方目录补充题名与表达",
-  "sources": [{"kind":"url","citation":"官方目录支持题名和层级","url":"https://example.org/catalog"}],
+  "sources": [
+    {"key":"catalog","kind":"url","citation":"官方目录支持题名和层级","url":"https://example.org/catalog"}
+  ],
   "operations": [
     {"target":"entity","action":"update","id":"<实体 UUID>","base_version":3,"reviewed_candidate_ids":[],
-     "patch":[{"path":"/translations/zh-CN/title","value":"中文题名"}]},
+     "patch":[{"path":"/translations/zh-CN/title","value":"中文题名"}],
+     "source_refs":[{"source":"catalog","pointers":["/translations/zh-CN/title"]}]},
     {"target":"entity","action":"create","ref":"recording","reviewed_candidate_ids":[],
-     "document":{"kind":"expression","title":"录音","work_id":"<Work UUID>"}}
+     "document":{"kind":"expression","title":"录音","work_id":"<Work UUID>"},
+     "source_refs":[{"source":"catalog"}]}
   ]
 }
 ```
+
+**破坏性变更（无兼容模式）：** `sources` 是带唯一 `key` 的证据池；每个操作必须用非空 `source_refs` 声明自己引用哪些来源（可细到 JSON Pointer）。旧格式（来源无 key、操作无 `source_refs`）一律拒绝，客户端必须升级。缺/空 `source_refs` → `400 {"error":"source_refs_required","applied":false,"operation":<从 0 起>}`；来源无 key → `source_key_required`；池中有未被引用的来源 → `source_unused`。历史修订在迁移后带 `scope:"commit"`，仅表示整次提交级证据，不是字段级证明。
 
 `target` 是 `entity` 或 `relation`。创建需要唯一 `ref` 和 `document`，不能声明服务端 ID、version、created_by、redirect_id。更新需要 ID、权威 `base_version` 和 patch；基线由服务端修订取得，不能提交伪造的旧快照。每个目标每批只能编辑一次。
 
@@ -91,6 +97,10 @@ checkout、预览、推送及回执读取与其他目录请求共用默认 180 �
 | 400 `base_revision_missing` | 服务端找不到指定的权威基线；重新 checkout 并重新形成修改 |
 | 400 `use_track_contents_endpoint` | 隐藏收录不能整体 patch，改用单条收录端点；其余稀疏修改可保留完整历史事实 |
 | 400 `commit_incomplete` | 无法恢复已存提交的完整结果；保留原 ID 与载荷，报告服务异常 |
+| 400 `source_refs_required` | 某个操作缺或空 `source_refs`；响应含 `applied:false` 与 `operation` 索引。旧格式无兼容，必须补齐 |
+| 400 `source_key_required` / `invalid_source_key` / `duplicate_source_key` | 来源池缺 key、key 不合规或重复 |
+| 400 `source_unused` / `unknown_source_ref` / `duplicate_source_ref` | 池中有未引用的来源，或操作引用了不存在/重复的 key |
+| 400 `invalid_source_pointer` / `source_pointer_not_in_document` / `source_pointer_not_patched` | 指针非法，或不在 create document / update patch 覆盖范围内 |
 | 409 `commit_conflict` | 按 conflict.paths 比较双方改动，重新取舍后 rebase |
 | 409 `definitions_conflict` | 重新读取定义和工作副本，核对字段契约 |
 | 409 `identity_candidates_changed` | 按 identity_review 的当前 canonical 候选重新审查；整批未应用 |
