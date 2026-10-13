@@ -308,7 +308,7 @@ GET /api/catalog/entities/:id/revisions
 
 ## 外部来源只读查询
 
-写路径（`POST /api/importer/import` 与 `catalog.import.submit`）已删除。适配器只提供只读查询：返回上游原文、`FetchMeta`（`url` / `fetched_at` / `content_hash`），以及既有 preview 映射（lookup/detail）。落库请走常规实体写入或[工作副本与提交](/api-commits)。
+写路径（不再提供 `POST /api/importer/import`，权限码 `catalog.import.submit` 已删除）。适配器只提供只读查询：返回上游原文、`FetchMeta`（`url` / `fetched_at` / `content_hash`），以及既有 preview 映射（lookup/detail）。落库请走常规实体写入或[工作副本与提交](/api-commits)。
 
 当前已实现 Bangumi、DLsite、DMM 适配器，可选来源以 `GET /api/external-sources` 为准。两个端点只需登录（不再要求专用导入权限码）：
 
