@@ -1,13 +1,13 @@
 ---
 title: "新建与编辑"
-description: "实体写入 DTO、乐观锁、关系、生命周期与外部导入。"
+description: "实体写入 DTO、乐观锁、关系、生命周期与外部来源只读查询。"
 order: 50
 group: "api"
 ---
 
 # 新建与编辑
 
-批量编目与 Agent 编辑优先使用[工作副本与提交](/api-commits)，获得原子批次、字段合并和持久回执。本页维护交互式单对象操作、生命周期与导入的 DTO。
+批量编目与 Agent 编辑优先使用[工作副本与提交](/api-commits)，获得原子批次、字段合并和持久回执。本页维护交互式单对象操作、生命周期与外部来源只读查询的 DTO。
 
 实体、关系和收录通过对应端点写入；合并、停用与下架使用生命周期入口。按依赖顺序提交，每次请求分别处理自己的修改。
 
@@ -30,7 +30,6 @@ group: "api"
 | `catalog.relation.edit` | 创建 / 替换 / 删除关系 |
 | `catalog.lifecycle.manage` | 合并、退役、下架（`published → draft`），以及发布/处置他人的未发布条目 |
 | `catalog.definitions.manage` | 检查并保存动态定义与目录配置 |
-| `catalog.import.submit` | 调用外部导入的预览与落库 |
 | `catalog.shelves.manage` | 维护货架规则 |
 | `storage.asset.upload` | 上传与登记自己的资产 |
 
@@ -136,7 +135,7 @@ POST /api/catalog/entities
 
 `external_ids` 是外部库码到编号的对象。写入前读取 `GET /api/catalog/external-databases`，按当前 `category` 和 `validation_regex` 选择键与值：`category=all` 适用于所有 kind，其余分类必须等于实体的 kind。未知码返回 `400 invalid_external_key: <code>`，分类不匹配返回 `400 invalid_external_category: <code>`，空值、超长或不满足格式返回 `400 invalid_external_id: <code>`。
 
-值不统一假定为裸编号：例如 `official_website`、`fandom`、`moegirlpedia` 保存完整 URL，其他码按注册表规则填写。`url_pattern` 只决定展示链接，展开后须为绝对 HTTP(S) URL；没有可跳转地址的条码仍可作为文本标识。权威库登记不代表存在抓取适配器，导入来源以 `/api/importer/sources` 为准。
+值不统一假定为裸编号：例如 `official_website`、`fandom`、`moegirlpedia` 保存完整 URL，其他码按注册表规则填写。`url_pattern` 只决定展示链接，展开后须为绝对 HTTP(S) URL；没有可跳转地址的条码仍可作为文本标识。权威库登记不代表存在抓取适配器，可查询来源以 `GET /api/external-sources` 为准。
 
 哔哩哔哩标识应按语义选 `bilibili_bangumi`（Work，`ss`）、`bilibili_media`（Work，`md`）、`bilibili_episode`（ContentUnit，`ep`）、`bilibili_video`（ContentUnit，`BV` / `av`）。旧 `bilibili` 泛码默认停用，保留兼容历史及显式写入；停用仅隐藏可选预设，不能作为服务端拒绝所有写入的保证。
 
@@ -307,51 +306,44 @@ GET /api/catalog/entities/:id/revisions
 
 实体修订按实体可见性过滤。该端点也接受关系 ID（关系修订行的 `target_id` 就是关系 ID），此时可见性由关系两端实体共同判定。
 
-## 外部导入
+## 外部来源只读查询
 
-当前已实现 Bangumi、DLsite、DMM 适配器，可选来源以 `GET /api/importer/sources` 为准。三个端点都要 `catalog.import.submit`：
+写路径（`POST /api/importer/import` 与 `catalog.import.submit`）已删除。适配器只提供只读查询：返回上游原文、`FetchMeta`（`url` / `fetched_at` / `content_hash`），以及既有 preview 映射（lookup/detail）。落库请走常规实体写入或[工作副本与提交](/api-commits)。
+
+当前已实现 Bangumi、DLsite、DMM 适配器，可选来源以 `GET /api/external-sources` 为准。两个端点只需登录（不再要求专用导入权限码）：
 
 | 端点 | 作用 |
 |---|---|
-| `POST /api/importer/preview` | 按 URL / ID 出站抓取并返回结构化预览 |
-| `GET /api/importer/sources` | 列出真有适配器的来源，供导入弹窗取选项；只读注册表、不出站抓取 |
-| `POST /api/importer/import` | 按预览载荷落库：作品 → 发行 → 载体 → 曲目 → 关系逐次保存 |
+| `GET /api/external-sources` | 列出真有适配器的来源；只读注册表、不出站抓取 |
+| `POST /api/external-sources/query` | 统一只读查询：`op=search\|lookup\|detail`，返回 raw + FetchMeta（lookup/detail 另含 preview） |
+
+请求体（`ExternalSourceQueryRequest`）：
+
+| 字段 | 说明 |
+|---|---|
+| `op` | `search` / `lookup` / `detail`（必填） |
+| `source` | 适配器码；空/`auto` 时 lookup/detail 按 URL/ID 识别，search 默认 bangumi |
+| `q` | search 必填 |
+| `id` / `url_or_id` | lookup/detail 至少其一 |
+| `entity_type` | Bangumi 等可选过滤 |
+| `limit` | search 条数上限 |
 
 ::: warning 注意
-`import` 的每条实体各自一个事务：中途失败不会回滚已写入的前序实体，所以落库前的零写入预检才是整体防线。
-
-三个端点均计入目录的共享默认 180 次/分钟预算，读写合计；来源清单只读也消耗额度，见[限流](/api-overview#限流)。
+出站抓取使用**按来源**的等待节流（约 1 次/秒，如 MusicBrainz 规范），与入站 API 的 `rate_budget` 计数/拒绝无关——`rate_budget` 不是出站队列。
+端点仍计入目录共享默认 180 次/分钟入站预算。
 :::
 
-- Bangumi 预览含分集分页，详情抓取 ≤8 并发；DLsite/DMM 读取商品页生成 Work 与数字发行预览，不等同于 Bangumi 的分集和角色关系抓取
+- DLsite/DMM 的 `search` 返回 `search_not_supported`；请用 lookup/detail（URL 或商品 ID）
 - 明确来源接受当前适配器码，未实现的来源 `400 not_supported`；归一化会去空白、忽略大小写
-- preview 的缺省/auto 按 URL/ID 选择来源，无法识别时回落 bangumi；import 应使用预览返回的明确 source，缺省/auto 在写入归一化中仍回落 bangumi
-- Bangumi 的 `entity_type` 取 `work` / `artist` / `organization` / `character`，非法值 `400 invalid_entity_type`；DLsite/DMM 商品预览返回 work，落库以实际预览及零写入预检为准
-- `link_mode` 取 `new_work`（默认）/ `append_release_to_work` / `create_relation`
-- `has_release=true` 时必须带 `mediums`；缺少时返回 `400 invalid_payload: has_release=true requires mediums`。其他非 `append_release_to_work` 模式带非空发行对象但无载体时，返回 `400 invalid_payload: release requires mediums`。无载体发行应明确使用 `append_release_to_work` 并按该模式构造载荷。
-- `merge_translations` 会被显式拒绝，补译名走常规编辑
-- 落库前做零写入预检：属性值、未知字段码、`original_language`、翻译行与日期字段都按已发布定义校验，规则与实体写入一致
-- import 必须以 `source_urls` 提供合格来源；空数组或全部不是有效 URL 返回 `400 evidence_required`，本站 URL 返回 `400 source_not_eligible`，不自动生成本站 `self` 证据。`edit_note` 可提供明确说明，省略时由来源与 URL/ID 生成导入说明
-- 图书 infobox 的有效 ISBN-10 转为 ISBN-13 时重算校验位，ISBN-13 去除分隔符；非法 ISBN 只保留原文，不派生发行条码。显式发行 barcode（含 work.fields.barcode 的发行兜底）为 ISBN-10 或 GTIN-8/12/13/14 形态时，预检检查校验位，失败分别返回 `400 invalid_isbn` / `invalid_barcode` 且零写入；合法的显式 ISBN-10 保持调用者原值，专有文本条码不猜制式
-- 没有落库位置的载荷字段以 `unsupported_field_for_entity_type` 明确拒绝，不静默丢弃
-- Bangumi 导入会拉取条目的演职员与角色：语义明确的职位映射到精确关系码（如 `directed_by` / `photographed_by` / `voiced_by`）
-- 没有精确映射的职位落 `credit_for` 并把职位原文写进 `credit_role`
-- 角色番位落 `character_in` 的 `character_rank`，声优建 `voiced_by` 并以 `character` 引用角色实体
-- 上游 infobox 会映射到已声明的字段码：映射表命中才写，未命中的键只留在 `attributes.infobox` 原文快照里，不另造字段
-- 分集/篇目按上游分集端点落 `content_unit` 树
-- 发行版的 `edition_type` / `edition_batch` / `packaging` / `distribution_channel` 只在命中词表时写入，未命中时该维度留空而不是硬凑映射
+- lookup/detail 的缺省/`auto` 按 URL/ID 选择来源，无法识别时回落 bangumi
+- 响应含 `fetch`（主抓取）与可选 `fetches`（多次出站）、`raw`、以及 lookup/detail 的 `preview`（既有 `ImporterPreviewResponse` 形状，只读）
+- 永不自动写入、合并或修改目录实体
 
-::: warning 注意
-Bangumi 关系导入范围只含署名与角色关系。上游的 work↔work 关系网（`/v0/subjects/{id}/subjects` 一类关联）
-与 `publisher` 实体引用都在导入范围之外（预览只给自由文本名称，不虚构 Agent 引用）。
-:::
-
-### 来源清单：`GET /api/importer/sources`
+### 来源清单：`GET /api/external-sources`
 
 - `id` 是代码里实际实现的适配器集合，当前为 `bangumi` / `dlsite` / `dmm`
 - `names` / `category` / `icon` / `description` / `url_pattern` 来自外部权威库注册表，含停用行
-- `is_enabled` 只管外链字段是否出现，不决定有没有导入能力
-- 后台改名 / 换图标后弹窗下次打开即生效
+- `is_enabled` 只管外链字段是否出现，不决定有没有查询能力
 - 管理员新增一行注册表不会自动出现在这里：适配器是代码事实
 - `auto` 也不在清单里——它是解析别名，不是来源
 
