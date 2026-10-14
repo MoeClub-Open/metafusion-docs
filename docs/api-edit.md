@@ -62,7 +62,7 @@ group: "api"
 
 写入的实体引用使用小写、带连字符的规范 UUID，例如 `018f4d3a-2b1c-7def-8a90-123456789abc`。此规则适用于结构归属、`subjects[].work_id`、`contents[].expression_id`、关系端点，以及 definitions 声明为 `entity` 的属性（含嵌套 group/list）。大写、无连字符、括号包裹、`urn:uuid:` 前缀或额外空白会返回 `400 invalid_reference`。
 
-旧库存中的动态属性引用由 `000023_reference_canonicalization` 一次性迁移规范化；客户端不能依赖写入时自动转换旧格式。`external_ids` 是外部权威库编号，按各库规则校验，不套用目录实体引用规则。
+旧库存中的动态属性引用由 `000023_reference_canonicalization` 一次性迁移规范化；客户端不能依赖写入时自动转换旧格式。`external_links` 是外部权威库编号，按各库规则校验，不套用目录实体引用规则。
 
 ## 创建实体
 
@@ -75,7 +75,7 @@ POST /api/catalog/entities
     "original_language": "ja",
     "translations": { "zh-CN": { "title": "攻壳机动队", "summary": "..." } },
     "attributes": { "tags": ["动画", "电影"] },
-    "external_ids": { "bangumi": "265" },
+    "external_links": [{ "kind": "bangumi", "url": "https://bangumi.tv/subject/265", "external_id": "265" }],
     "pictures": [{ "url": "https://example.com/cover.jpg", "source": { "kind": "url", "citation": "官方海报", "url": "https://example.com" } }],
     "status": "published"
   },
@@ -93,7 +93,7 @@ POST /api/catalog/entities
 - 业务形态用标签（`attributes.tags`）或 GUI 配置的字段/词表表达，字段适用范围由 `applicable_kinds` 声明
 - `cover_aspect` 不是可写字段：它未在已发布定义中声明，自造这个键会被 `unknown_field` 拒绝
 - 比例只是展示建议（音乐 1:1、影视 2:3、书籍 3:4），展示层按封面图自然比例推断
-- `external_ids` 的键必须是已登记的外部权威库（见 `GET /api/catalog/external-databases`）
+- `external_links[].kind` 必须是已登记的外部权威库（见 `GET /api/catalog/external-databases`）；`url` 必填；`role` 可空（`official|primary|secondary|operator`）
 - 请求体里出现未知字段一律 `400 invalid_payload`（服务端按严格模式解码）
 - 创建实体与关系可带 `Idempotency-Key`，键按操作、用户和请求键区分。
 - 同键同载荷重放首创响应；同键不同载荷返回 `409 idempotency_conflict`。
@@ -133,7 +133,7 @@ POST /api/catalog/entities
 
 ### 外部标识
 
-`external_ids` 是外部库码到编号的对象。写入前读取 `GET /api/catalog/external-databases`，按当前 `category` 和 `validation_regex` 选择键与值：`category=all` 适用于所有 kind，其余分类必须等于实体的 kind。未知码返回 `400 invalid_external_key: <code>`，分类不匹配返回 `400 invalid_external_category: <code>`，空值、超长或不满足格式返回 `400 invalid_external_id: <code>`。
+`external_links` 是外部链接数组。每条至少有 `kind`（平台码）与规范化后的 `url`，可选 `external_id`、`role`（`official|primary|secondary|operator`，空表示无角色标签）、`origin`、`source_refs`。「官方」徽标只由 `role=official` 推出。写入前读取 `GET /api/catalog/external-databases`：`category=all` 适用于所有 kind，其余分类必须等于实体的 kind。同一实体 `(kind, url)` 唯一。未知码返回 `400 invalid_external_key: <code>`，分类不匹配返回 `400 invalid_external_category: <code>`，非法链接返回 `400 invalid_external_link` / `invalid_external_id`。
 
 值不统一假定为裸编号：例如 `official_website`、`fandom`、`moegirlpedia` 保存完整 URL，其他码按注册表规则填写。`url_pattern` 只决定展示链接，展开后须为绝对 HTTP(S) URL；没有可跳转地址的条码仍可作为文本标识。权威库登记不代表存在抓取适配器，可查询来源以 `GET /api/external-sources` 为准。
 

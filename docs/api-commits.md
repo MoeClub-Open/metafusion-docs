@@ -49,7 +49,7 @@ Patch 路径使用 JSON Pointer：`~` 编码为 `~0`，`/` 编码为 `~1`。`val
 
 ## 创建与身份更新的复核
 
-实体 create 和身份字段 update 必须提供 `reviewed_candidate_ids`，空数组表示已审查且无候选。身份 patch 包括 `/title`、`/external_ids` 及其子路径，以及 `/translations` 整组、`/translations/<locale>` 整行或 `/translations/<locale>/title`。只改非身份字段的 update 和关系操作不接受该数组。
+实体 create 和身份字段 update 必须提供 `reviewed_candidate_ids`，空数组表示已审查且无候选。身份 patch 包括 `/title`、`/external_links` 及其子路径，以及 `/translations` 整组、`/translations/<locale>` 整行或 `/translations/<locale>/title`。只改非身份字段的 update 和关系操作不接受该数组。
 
 服务端用最终题名、各语言题名和外部 ID 构造 candidates 查询，按 Work（Expression/ContentUnit）、Release（Medium）或 Medium（Track）限定作用域；不加入 duration 等容易产生大量命中的弱条件。更新以三方合并后的文档复核，排除当前实体的 canonical 身份及归于它的历史别名。先用相同条件的 [candidates 查询](/api-entities#并发编目的查重候选)读取 canonical ID 并核来源。有候选时优先复用，确认为不同对象才能列入已审查数组并说明理由。
 

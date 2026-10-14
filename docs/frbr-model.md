@@ -33,7 +33,7 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | `title` / `original_language` | 基础题名与原始语言 |
 | `translations` | 按语言标签分组的对象，各项含 `title`、`summary`、`aliases` |
 | `attributes` | 动态属性，允许键及适用种类由 definitions 决定 |
-| `external_ids` | 已登记外部权威库的编号 |
+| `external_links` | 外部权威链接数组（kind/url/可选 external_id 与 role） |
 | `pictures` | 有序图片引用及来源；首项为封面，时间信息不改变顺序 |
 | `created_by` / `created_at` / `updated_at` | 创建者与时间 |
 | `redirect_id` | 合并后的目标，由生命周期操作维护 |
