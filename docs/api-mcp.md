@@ -71,6 +71,6 @@ HTTP 工具支持 GET、HEAD、OPTIONS、POST、PUT、PATCH、DELETE。JSON 请�
 
 `timeout_seconds` 默认 30、最大 60；`max_bytes` 默认 256 KiB、最大 1 MiB，请求体也限 1 MiB。结果包含 `status`、选定响应头、`data`（完整 JSON）或 `text`/`base64`、`fetched_at`、`content_hash`、`truncated`、`complete`。截断时 `complete=false`、`hash_scope=returned_bytes`，不能把该哈希当作完整页面哈希。外部 HTTP 错误保留状态和响应；写请求连接或读取响应失败返回 `outcome=unknown`，不自动重放。
 
-全网搜索默认使用无需密钥的 DuckDuckGo；站点运维可通过 `MCP_SEARCH_PROVIDER` 切换 Brave（需 `MCP_SEARCH_API_KEY`）或 SearXNG（需 `MCP_SEARCH_URL` 指向启用 JSON 输出的公开 `/search` 端点）。默认返回 5 条，最多 20 条；`language` 接受所选提供方的语言/地区码。搜索返回 `items` 与 `fetch`（URL、抓取时间、响应内容哈希），不自动抓取每条结果或入库。验证码或上游无效响应会明确失败。
+全网搜索默认使用无需密钥的 DuckDuckGo；站点运维可通过 `MCP_SEARCH_PROVIDER` 切换 Bing（公开 RSS 搜索，无需密钥）、Brave（需 `MCP_SEARCH_API_KEY`）或 SearXNG（需 `MCP_SEARCH_URL` 指向启用 JSON 输出的公开 `/search` 端点）。默认返回 5 条，最多 20 条（Bing RSS 可用条数由上游限制）；`language` 接受所选提供方的语言/地区码。搜索返回 `items` 与 `fetch`（URL、抓取时间、响应内容哈希），不自动抓取每条结果或入库。验证码或上游无效响应会明确失败。
 
 账号登录、口令、OAuth 授权与机器令牌自助管理仍在浏览器完成。平台业务 API 可通过 MCP 使用已批准权限；新授权不能取得 `.manage` 管理权限，管理操作使用具备相应权限的浏览器会话。
