@@ -47,6 +47,23 @@ group: "api"
 
 Patch 路径使用 JSON Pointer：`~` 编码为 `~0`，`/` 编码为 `~1`。`value:null` 是显式空值，`remove:true` 是移除键，两者不可同时提供。对象字段可逐键编辑，数组整组处理；不支持数组下标，不允许同一批 patch 中出现祖先与子路径。实体可编辑字段以实例 OpenAPI 与动态 definitions 为准，ID、kind、版本及 Work/Release/Medium 归属不能通过 patch 改写。关系只可编辑 position、attributes，不能改端点和关系码。
 
+## 编辑条目正文
+
+条目正文保存在 `translations.<locale>.body`，属于目录实体，使用同一份 checkout、权限、状态、版本和修订。局部修改正文时直接 patch 对应语言字段，保留简介和结构化资料；仅改正文不提交 `reviewed_candidate_ids`。以下操作放入提交的 `operations`，来源池包含示例中的 `official` key，ID 与 `base_version` 使用 checkout 的实际值：
+
+```json
+{
+  "target": "entity",
+  "action": "update",
+  "id": "<实体 UUID>",
+  "base_version": 3,
+  "patch": [{"path":"/translations/zh-CN/body","value":"## 创作背景\n有来源的说明。[^official]\n\n[^official]: https://example.org/source"}],
+  "source_refs": [{"source":"official","pointers":["/translations/zh-CN/body"]}]
+}
+```
+
+脚注用于阅读，不代替提交证据。正文与其他字段的独立修改可按现有三方合并处理；同一语言的正文是一个字段，同时修改时返回字段冲突，需阅读前后内容后人工合并。删除该语言正文使用 `remove:true`，不删除该语言的题名、简介和别名。单语种正文上限与错误码见[新建与编辑](/api-edit)。
+
 ## 创建与身份更新的复核
 
 实体 create 和身份字段 update 必须提供 `reviewed_candidate_ids`，空数组表示已审查且无候选。身份 patch 包括 `/title`、`/external_ids` 及其子路径，以及 `/translations` 整组、`/translations/<locale>` 整行或 `/translations/<locale>/title`。只改非身份字段的 update 和关系操作不接受该数组。
