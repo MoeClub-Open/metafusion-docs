@@ -9,16 +9,14 @@ group: "api"
 
 批量编目与 Agent 编辑优先使用[工作副本与提交](/api-commits)，获得原子批次、字段合并和持久回执。本页维护交互式单对象操作、生命周期与外部来源只读查询的 DTO。
 
-实体、关系和收录通过对应端点写入；合并、停用与下架使用生命周期入口。按依赖顺序提交，每次请求分别处理自己的修改。
+交互编辑器与 Agent 均通过目录提交写入。没有草稿或发布状态；条目 `state` 只表示 active / deleted / merged 生命周期，已生效资料为 `review_status=reviewed`。普通提交进入审核队列，免审提交立即生效；审核期间保持旧条目内容与版本。下表中的旧单对象写接口仅供持有 `catalog.review.bypass` 的受信任维护工具使用，其他调用返回 `400 commit_required`。
 
 | 用途 | 端点 |
 |---|---|
 | 实体 | `/api/catalog/entities` |
 | 关系 | `/api/catalog/relations` |
 | 单条 Track 收录 | `/api/catalog/tracks/:id/contents` 与 `/:position` |
-| Track 状态 | `PATCH /api/catalog/tracks/:id/status` |
 | 合并 / 退役 | `/api/catalog/entities/:id/lifecycle` |
-| 下架（`published → draft`） | `/api/catalog/entities/:id/unpublish` |
 
 ## 前提：认证与权限码
 
@@ -28,7 +26,9 @@ group: "api"
 |---|---|
 | `catalog.entity.edit` | 创建与编辑实体（含维护公开条目） |
 | `catalog.relation.edit` | 创建 / 替换 / 删除关系 |
-| `catalog.lifecycle.manage` | 合并、退役、下架（`published → draft`），以及发布/处置他人的未发布条目 |
+| `catalog.review.manage` | 审核整笔目录提交，不自动获得免审权限 |
+| `catalog.review.bypass` | 本人的提交立即生效；使用旧单对象写接口仍需各操作的编辑权限 |
+| `catalog.lifecycle.manage` | 合并与退役条目 |
 | `catalog.definitions.manage` | 检查并保存动态定义与目录配置 |
 | `catalog.shelves.manage` | 维护货架规则 |
 | `storage.asset.upload` | 上传与登记自己的资产 |
@@ -39,8 +39,7 @@ group: "api"
 权限判定只看 `permissions`；缺失或空权限集合不会按角色补授。
 
 ::: warning 注意
-没有 `catalog.entity.edit` 的登录用户仍可写，但只能把条目存成 `draft` / `pending_review`，
-不能发布，也不能触碰已发布条目。
+没有协作编辑权限的登录用户可新建提交及维护自己创建的条目；修改他人资料需要 `catalog.entity.edit`。能编辑不代表免审。
 :::
 
 ## 写入前必带的证据
@@ -76,8 +75,7 @@ POST /api/catalog/entities
     "translations": { "zh-CN": { "title": "攻壳机动队", "summary": "作品简介", "body": "## 创作背景\n根据外部资料整理的条目说明。[^official]\n\n[^official]: https://example.com/source" } },
     "attributes": { "tags": ["动画", "电影"] },
     "external_links": [{ "kind": "bangumi", "url": "https://bangumi.tv/subject/265", "external_id": "265" }],
-    "pictures": [{ "url": "https://example.com/cover.jpg", "source": { "kind": "url", "citation": "官方海报", "url": "https://example.com" } }],
-    "status": "published"
+    "pictures": [{ "url": "https://example.com/cover.jpg", "source": { "kind": "url", "citation": "官方海报", "url": "https://example.com" } }]
   },
   "expected_version": 0,
   "edit_note": "initial import per official catalog",
@@ -174,28 +172,10 @@ PUT 是整实体替换，不是局部 PATCH：先 `GET /api/catalog/entities/:id
 
 Track 整体写入时，每条 `contents[].sources` 未提供或为 `null` 都会继承本次编辑的顶层 `sources`，即使该收录的其他字段未改变。要保留既有逐条证据，须将回读的 `contents[].sources` 数组显式带回；服务端不会按旧条目自动补回。
 
-详情可能过滤调用者不可见的收录。没有 `catalog.lifecycle.manage` 时，整体 PUT 若遗漏或改变隐藏收录会返回 `403 forbidden`，防止把裁剪后的读取结果当作完整事实覆盖。修改可见收录使用单条收录端点，仅改状态使用专用 PATCH，题名或属性等字段可用[提交协议](/api-commits)的稀疏 patch。
+详情可能过滤调用者不可见的收录。没有 `catalog.lifecycle.manage` 时，整体 PUT 若遗漏或改变隐藏收录会返回 `403 forbidden`，防止把裁剪后的读取结果当作完整事实覆盖。修改可见收录使用提交的 `content` 操作；旧单条收录端点仅限免审工具，题名或属性等字段可用[提交协议](/api-commits)的稀疏 patch。
 
 - `expected_version` 与当前版本不一致返回 `409 version_conflict`：重读后再写，不要盲目重试
-- 发布时写 `status: "published"`，至少带一条 `translations`，否则 `400 translation_required`；Track 仅改状态使用下面的专用 PATCH
 - `deleted` / `merged` 走生命周期端点；PUT 提交这两个状态返回 `400 use_lifecycle_endpoint`
-- 已发布条目改回 `draft` 走下架端点 `POST /api/catalog/entities/:id/unpublish`（见下「下架」）；PUT 提交降级仍然返回 `400 use_lifecycle_endpoint`——降级只有这一条通道
-
-### Track 状态
-
-仅改 Track 状态时使用专用端点，避免把按可见性裁剪过的 `contents` 整体写回。先确认目标实例 OpenAPI 已声明此端点，再取当前版本：
-
-```http
-PATCH /api/catalog/tracks/:id/status
-{
-  "status": "published",
-  "expected_version": 1,
-  "edit_note": "依据官方曲目表发布；本次仅将 status 由 draft 置为 published",
-  "sources": [{"kind": "url", "citation": "官方曲目表支持 status；本次仅将 status 由 draft 置为 published", "url": "https://example.com/tracklist"}]
-}
-```
-
-只接受上述四个键，`status` 为 `draft` / `pending_review` / `published`；传题名、属性、`contents` 或其它键返回 `400 invalid_payload`。权限及发布引用检查与实体编辑一致，`expected_version` 冲突返回 `409 version_conflict`。成功只改变状态、版本和更新时间，保留原有收录、逐条来源及其它字段，并写入修订、审计和 outbox；响应仍按当前可见性裁剪。`published` 降级及 `deleted` / `merged` 仍须使用生命周期专用入口。
 
 ### 单条收录
 
@@ -274,30 +254,7 @@ POST /api/catalog/entities/:id/lifecycle
 合并与退役由 `target_id` 有无决定，带 `{"action":"publish"}` 会 `400 invalid_payload`。
 :::
 
-状态集合是 `draft` / `pending_review` / `published` / `deleted` / `merged` 五档，中间态只有待审一档。
-
-## 下架（`published → draft`）
-
-```http
-POST /api/catalog/entities/:id/unpublish
-{ "expected_version": 3, "edit_note": "线上条目内容有误，退回草稿修订",
-  "sources": [{ "kind": "url", "citation": "读者反馈的官方原文", "url": "https://example.com" }] }
-```
-
-- 下架是状态机里唯一的降级入口：只接受 `published → draft`
-- `draft` / `pending_review` 没有可下架的内容，`deleted` / `merged` 是终态；四种情况都是 `400 invalid_status`
-- 请求体是 `{expected_version, edit_note, sources}`，没有 `target_id`——下架只改自身状态，带上会被拒成 `400 invalid_payload`
-- 证据要求与其它写入一致：`edit_note` 非空 + 至少一条 `sources`，否则 `400 evidence_required` / `invalid_source`
-- `expected_version` 与当前版本不一致返回 `409 version_conflict`（版本条件先判，即使实体已不在 `published` 也是 409）
-- 成功返回与实体写入同形状的完整实体：`status` 为 `draft`、`version` 已 +1
-- 同一事务写一条修订行（`GET /api/catalog/entities/:id/revisions` 可查）与一条 `entity.unpublished` 事件
-- 需要 `catalog.lifecycle.manage`（与合并 / 退役同一档：能清退的人才能下架）
-- 未登录 `401 authentication_required`，缺码 `403 forbidden`；id 不存在是 `404 not_found`，状态不对是 `400 invalid_status`（两者不混同）
-
-::: details 备注
-下架不计入贡献统计的 `audit_actions`（那里只数 `entity.deleted` / `entity.merged`）：下架不是清退。
-修订行仍落在操作者名下，贡献流与修订历史都能查到这次改动（可见性照旧）。
-:::
+生命周期为 `active` / `deleted` / `merged`。审核状态独立属于提交，取值只有 `pending_review` / `reviewed`；结果通过 `review_decision` 区分 pending / approved / rejected / exempt / legacy。
 
 ## 修订历史
 
@@ -355,10 +312,9 @@ GET /api/catalog/entities/:id/revisions
 | 端点 | 作用 |
 |---|---|
 | `GET /api/exchange/entities/:id` | 导出单个实体快照（JSON），供另一实例导入 |
-| `POST /api/exchange/proposals` | 提交外部编辑提案，请求体与实体写入相同 |
 
-- 导出按调用者身份判可见性（匿名只看已发布），不存在或不可见都是 `404 not_found`；数据库或服务故障返回错误，不能当作条目缺失。Track 收录按表达可见性裁剪，不能把公开导出当作完整历史备份。
-- 提案由服务端强制落 `pending_review`，不能绕过审核直接发布
+- 导出按调用者身份判可见性（匿名读取正常条目），不存在或不可见都是 `404 not_found`；数据库或服务故障返回错误，不能当作条目缺失。Track 收录按表达可见性裁剪，不能把公开导出当作完整历史备份。
+外部编辑使用[目录提交](/api-commits)，旧 `POST /exchange/proposals` 已移除。
 
 ## 动态定义管理
 

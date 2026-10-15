@@ -15,10 +15,26 @@ group: "api"
 2. 本地编辑 JSON，保留基线。新实体先按下文查重；创建依赖用 `{"$ref":"名称"}` 对象，不能伪造 UUID。
 3. 本地 commit：保存不可变请求、证据与固定 UUID。一个工作区保留一个待推送提交，各 Agent 使用独立目录。
 4. `POST /api/catalog/commits/preview`：真实校验后整笔回滚；返回 `applied:false`，不保留实体、修订、通知或搜索事件。预览 ID 不可用于后续引用。
-5. `POST /api/catalog/commits`：原子推送；全部操作成功才保存事实、修订、通知、搜索 outbox 与回执。每批 1–100 个操作，请求体最多 2 MiB，按声明顺序满足引用依赖。
-6. `GET /api/catalog/commits/{id}`：原操作者查询持久回执。成功后重新 checkout，获得可能已被其他编辑者推进的当前版本。
+5. `POST /api/catalog/commits`：普通提交返回 `202` / `pending_review`，只保存提交和冻结差异；不改变条目、版本、修订、通知或搜索事件。具有 `catalog.review.bypass` 时返回 `200` 并原子应用事实、修订、通知、搜索 outbox 与回执。每批 1–100 个操作，请求体最多 2 MiB，按声明顺序满足引用依赖。
+6. `GET /api/catalog/commits/{id}`：原操作者或审核人查询持久回执（HTTP 200）。已生效后重新 checkout，获得可能已被其他编辑者推进的当前版本。
 
-提交范围是目录实体与语义关系的创建、更新。删除、合并身份、下架、定义配置、上传、账号和互动各有自己的权限与事务入口；提交不提供跨服务事务或服务端长期分支。修订的 `commit_id` 在数据库中关联整笔推送，原有按实体读取历史仍有效。
+提交范围包括实体和关系创建、更新、关系删除及单条 Track 收录修改。实体退役、合并身份、定义配置、上传、账号和互动各有自己的权限与事务入口；提交不提供跨服务事务或服务端长期分支。修订的 `commit_id` 在数据库中关联整笔推送，原有按实体读取历史仍有效。
+
+## 提交审核
+
+条目没有草稿或发布状态。`state` 是只读生命周期（active / deleted / merged），`review_status=reviewed` 表示当前已生效资料。迁移时存量条目按管理员决定统一视为已审核，不改写版本与历史证据。
+
+提交的 `review_status` 只有 `pending_review`、`reviewed`；`review_decision` 表示 pending / approved / rejected / exempt / legacy。`202` 与 `applied=false` 是已确认接收，不能当成写入失败换 ID 重推。待审新建实体只预留 refs，通过前实体不存在。退回不会修改当前条目，原提交 ID 不能重新应用；应修改后准备新提交。
+
+- `GET /api/catalog/commits?review_status=pending_review&limit=25&offset=0`：本人提交；持 `catalog.review.manage` 可查看全队列。
+- `GET /api/catalog/commits/{id}/submission`：原请求、作者、冻结的 before/after 差异及审核回执，仅作者或审核人可读。
+- `POST /api/catalog/commits/{id}/review`：`{"decision":"approve","note":"已核对来源"}` 或 `reject`，需要 `catalog.review.manage`。批准时重新校验相同不可变请求及原作者权限快照，原子应用并把贡献归给原作者；审核人单独留痕。定义或事实冲突保持待审且不改条目。
+
+免审权限 `catalog.review.bypass` 与审核权限独立。目录编辑组默认仍需审核；目录管理员组持有两项权限。旧单对象写接口需要免审权限，不能绕过队列。
+
+关系删除操作：`{"target":"relation","action":"delete","id":"<UUID>","base_version":2,"source_refs":[{"source":"official"}]}`。
+
+单条收录操作：`{"target":"entity","action":"content","id":"<Track UUID>","base_version":7,"content_change":{"action":"add","position":0,"inclusion":{"expression_id":"<Expression UUID>","position":0,"locator":{}}},"source_refs":[{"source":"official"}]}`。`replace` / `delete` 的 `position` 为已有收录旧位置；删除省略 inclusion。以 Track 版本防冲突，保留其他及不可见历史收录。
 
 ## 提交格式
 
