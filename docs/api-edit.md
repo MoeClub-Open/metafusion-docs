@@ -73,7 +73,7 @@ POST /api/catalog/entities
     "kind": "work",
     "title": "攻壳机动队",
     "original_language": "ja",
-    "translations": { "zh-CN": { "title": "攻壳机动队", "summary": "..." } },
+    "translations": { "zh-CN": { "title": "攻壳机动队", "summary": "作品简介", "body": "## 创作背景\n根据外部资料整理的条目说明。[^official]\n\n[^official]: https://example.com/source" } },
     "attributes": { "tags": ["动画", "电影"] },
     "external_ids": { "bangumi": "265" },
     "pictures": [{ "url": "https://example.com/cover.jpg", "source": { "kind": "url", "citation": "官方海报", "url": "https://example.com" } }],
@@ -87,7 +87,8 @@ POST /api/catalog/entities
 
 - `kind`：`agent` / `collection` / `work` / `content_unit` / `expression` / `release` / `medium` / `track`
 - 创建时 `entity.id` 留空（否则 `400 id_must_be_empty`），`expected_version` 为 0；更新使用详情返回的身份与版本。
-- `translations` 是按 locale 分组的对象，不是数组；每个语种含 `title` / `summary` / `aliases`
+- `translations` 是按 locale 分组的对象，不是数组；每个语种含 `title` / `summary` / `body` / `aliases`。`summary` 是简短纯文本简介；可选 `body` 是共同维护的 Markdown 条目正文，省略或空串表示没有正文。每语种最多 100000 个 Unicode 字符，超长返回 `400 article_too_long`，含 NUL 返回 `400 invalid_article_body`。正文沿用实体权限、状态、来源与修订，脚注不替代顶层 `sources`。
+- 整实体 PUT 会替换全部语言资料，包括正文。先读完整详情并保留其它语言与正文；需要局部编辑时，使用[提交 API](/api-commits#编辑条目正文)按字段 patch。
 - 原语言题名放在对应语种行里
 - `attributes` 的键必须在已发布定义中声明，未声明的键返回 `400 unknown_field: <code>`
 - 业务形态用标签（`attributes.tags`）或 GUI 配置的字段/词表表达，字段适用范围由 `applicable_kinds` 声明

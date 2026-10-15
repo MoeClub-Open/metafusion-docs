@@ -202,6 +202,10 @@ GET /api/users/{id}   # 匿名可读：某账号的公开资料
 
 ## 管理台端点
 
+站点管理入口统一为 `/admin`，顶栏按当前权限切换目录、账号、社区和存储工作区。
+账号工作区可直接访问 `/admin?workspace=account`，具体页面及其查询参数保存在地址中，便于刷新和分享。
+各工作区继续使用同域登录和各服务自己的权限检查；连接失败时可重试，旧的 `/admin/account/` 独立入口仍可使用。
+
 | 端点 | 权限码 |
 |---|---|
 | `GET\|POST /api/admin/users`、`PUT /api/admin/users/:id/password` | `auth.users.manage` |

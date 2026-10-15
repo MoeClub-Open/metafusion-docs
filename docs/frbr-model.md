@@ -31,7 +31,7 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | `id` / `kind` | UUID 与固定种类 |
 | `version` / `status` | 乐观锁版本与生命周期状态 |
 | `title` / `original_language` | 基础题名与原始语言 |
-| `translations` | 按语言标签分组的对象，各项含 `title`、`summary`、`aliases` |
+| `translations` | 按语言标签分组的对象，各项含 `title`、简短纯文本 `summary`、Markdown 条目正文 `body`、`aliases`；正文与实体共同修订 |
 | `attributes` | 动态属性，允许键及适用种类由 definitions 决定 |
 | `external_ids` | 已登记外部权威库的编号 |
 | `pictures` | 有序图片引用及来源；首项为封面，时间信息不改变顺序 |
