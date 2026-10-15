@@ -81,7 +81,7 @@ group: "api"
 | --- | --- |
 | `GET /api/catalog/shelves`、`/shelves/feed` | 公开规则与求值后的作品 |
 | `/api/admin/shelves`、`/:id` | 管理货架，需要 `catalog.shelves.manage` |
-| `GET /api/catalog/external-databases` | 可用于 external_ids 的权威库 |
+| `GET /api/catalog/external-databases` | 可用于 external_links 的权威库 |
 | `/api/admin/external-databases`、`/:code` | 管理外部库，需要 `catalog.definitions.manage` |
 
 货架 query 支持 tags / fields / vocab_terms / relations：条件间 AND，同数组内 OR。空 query 收录全部已发布 Work。sort 为 `updated`、`created` 或 `title`；名称需四语。

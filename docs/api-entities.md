@@ -95,7 +95,7 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 {
   "kind": "work",
   "titles": ["夜明け", "Dawn"],
-  "external_ids": [{"provider": "wikidata", "value": "Q123"}],
+  "external_links": [{"kind": "wikidata", "value": "Q123"}],
   "attributes": [{"key": "duration", "value": "213"}],
   "limit": 1000
 }
@@ -222,7 +222,7 @@ POST /api/catalog/expressions/details
 | `GET /api/catalog/tags` | 标签频次聚合（只统计已发布实体） |
 | `GET /api/catalog/shelves` | 已启用的虚拟货架规则 |
 | `GET /api/catalog/shelves/feed` | 每个货架加求值后的条目 |
-| `GET /api/catalog/external-databases` | 可用的外部权威库定义（`external_ids` 的合法键） |
+| `GET /api/catalog/external-databases` | 可用的外部权威库定义（`external_links[].kind` 的合法平台码） |
 | `GET /api/catalog/compare?ids=a,b` | 2–6 个可见实体的字段对比；Release/Medium 附完整载体/轨目树，属性只对比 comparable 字段 |
 
 - definitions 的字段与规则说明见[动态定义与配置](/api-definitions)。
