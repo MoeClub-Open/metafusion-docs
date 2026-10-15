@@ -246,7 +246,7 @@ POST /api/catalog/entities/:id/lifecycle
 - 旧 id 用 `GET /api/catalog/entities/:id/resolve` 跟随到保留实体
 - 不带 `target_id` 为退役：状态置 `deleted`
 - 证据要求与实体写入一致：`edit_note` 非空 + 至少一条 `sources`，空数组会被 `400 evidence_required` 拒绝
-- 已 `deleted` / `merged` 的实体再调会返回 `400 invalid_status`
+- 已 `deleted` / `merged` 的实体再调会返回 `400 invalid_state`
 - 两个动作都需要 `catalog.lifecycle.manage`
 
 ::: warning 注意
