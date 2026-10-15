@@ -35,9 +35,17 @@ Cookie: mf_session=<token>         # 会话令牌
 ```http
 GET    /api/auth/tokens                  # 需登录：列出本人的令牌（含已吊销的，带 active=false）
 POST   /api/auth/tokens                  # 需登录：创建；201 响应体是明文唯一出现的地方
-DELETE /api/auth/tokens/{id}             # 需登录：吊销本人一张令牌（幂等）
+PATCH  /api/auth/tokens/{id}             # 需登录：改名或调整 scopes
+POST   /api/auth/tokens/{id}/revoke      # 需登录：撤销，保留列表记录
+DELETE /api/auth/tokens/{id}             # 需登录：删除列表记录并撤销
 POST   /api/auth/tokens/introspect       # 下游服务内部调用，不是给用户调的
 ```
+
+MCP 通过独立的 `POST /api/auth/mcp-tokens` 建立委托凭据（每账号最多 50 个有效凭据），`PATCH /api/auth/mcp-tokens/{id}` 仅缩减权限，`DELETE /api/auth/mcp-tokens/{id}` 撤销。三者均要求本人站内会话，不能由 PAT 或第三方 OAuth 自行创建、编辑或撤销。`mcp.connect` 仅供此类凭据标识身份。内部共用高熵令牌的哈希存储和内省，不复用用户的个人 API Key。
+
+个人密钥管理也仅接受站内会话。请求显式提供 `Authorization` 时以该凭据为准，拒绝后不会回退浏览器 Cookie；把 PAT 放入 `mf_session` 也不能获得会话权限。
+
+MCP 服务在客户端撤销 OAuth 连接时调用 `POST /api/auth/mcp-tokens/revoke`，请求体为 `{ "token": "<完整委托凭据>" }`。该端点只允许凭完整凭据撤销其自身，不能改权限、创建凭据或撤销个人 API Key；未知凭据统一成功。请求体不写入审计。用户在管理页撤销失败后，可通过“重试清理”处理残留凭据。
 
 ### 明文与存储
 
@@ -51,18 +59,20 @@ POST   /api/auth/tokens/introspect       # 下游服务内部调用，不是给�
 - `expires_in_days` 省略或为 0 表示永不过期；负数或超过 3650（10 年）返回 `400 invalid_expiry`。
 - `scopes` 是权限码（`catalog.entity.edit` 这类），不是 `read` / `write` 词表。
 - 每个码须格式合法且创建者当前持有；超出本人权限返回 `scope_not_granted: <code>`，不会静默取交集。
-- 新签发的 PAT 不接受 `*` 或任何以 `.manage` 结尾的权限码，即使本人拥有也返回 `400 forbidden_pat_scope`；管理操作使用具备相应权限的浏览器会话。既有 PAT 不因此自动吊销，有效权限仍按当前账号权限计算。
+- 新签发或调整 scopes 的个人 PAT 不接受 `mcp.connect`、`*` 或任何以 `.manage` 结尾的权限码，即使本人拥有也返回 `400 forbidden_pat_scope`；管理操作使用具备相应权限的浏览器会话。既有 PAT 不因此自动吊销，有效权限仍按当前账号权限计算。
 - 非法码返回 `invalid_scope: <code>`；重复项去重并保持请求顺序。
 - scopes 必须非空；省略、空数组或去除空白后为空，返回 `invalid_scope: empty`。
 
 ### 有效权限与限额
 
 - 实际权限 = 账号现时权限 ∩ 令牌 scopes，由内省重新计算。交集可以为空：此时令牌仍标识账号，但不能通过任何权限码闸门；没有角色兜底。
-- 每个账号未吊销的令牌最多 10 张，超出返回 `token_limit_reached`（已吊销的不占额度）。
+- 每个账号有效的个人令牌最多 10 张，超出返回 `token_limit_reached`；已撤销、已过期或已删除的不占额度。MCP 委托凭据独立计数，不列入个人 API Key 列表。
 
-### 到期与吊销
+### 编辑、删除与撤销
 
-- `DELETE /api/auth/tokens/{id}` 幂等吊销，列表仍保留该令牌并标为 `active=false`。
+- `PATCH /api/auth/tokens/{id}` 接受可选的 `name`、`scopes`，至少一项。名称规则与创建相同；权限仍须是本人持有的可委托权限。修改不轮换明文、不恢复已失效的令牌。
+- `POST /api/auth/tokens/{id}/revoke` 幂等撤销，列表保留该令牌并标为 `active=false`。
+- `DELETE /api/auth/tokens/{id}` 同时撤销并从列表移除；数据库保留审计关联记录，重复删除仍成功。
 - 别人的或不存在的一律 `token_not_found`——两种情况不区分，避免探测。
 
 ::: warning 吊销不是立即生效
