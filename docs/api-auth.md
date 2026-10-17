@@ -162,6 +162,8 @@ PUT  /api/auth/password          # 改密码：{ old_password, new_password }
 
 没有 `refresh_token` 字段：续期走 `POST /api/auth/refresh`。
 
+本人站内会话读取 `/api/auth/me` 时，账号对象还带最新的 `favorites_public` 与 `email_public` 布尔值；这些是账号隐私偏好，不属于实例准入设置 `/api/auth/settings`。
+
 服务端会话有效期为 24 小时。登出、全部登出与改密会移除相应会话；下游已签发 JWT 的撤销窗口见[账号封禁](#账号封禁)。
 
 ::: warning 令牌注销集合是单实例实现
@@ -183,24 +185,45 @@ DELETE /api/auth/oauth-grants/{client_id}      # 需登录：撤回我对该应�
 
 自助接口只处理本人授权。管理者按客户端或用户吊销的接口见[OAuth 客户端治理](/oauth-integration)。
 
+## 隐私设置
+
+```http
+GET   /api/auth/privacy   # 本人的收藏与邮箱公开设置
+PATCH /api/auth/privacy   # 部分更新，至少提供一项
+```
+
+两个接口均只接受本人站内会话；匿名、PAT、第三方 OAuth 访问令牌及 ID token 返回 `401 authentication_required`。成功响应直接为：
+
+```json
+{ "favorites_public": true, "email_public": false }
+```
+
+- `favorites_public` 默认为 `true`，控制其他人能否读取收藏列表与收藏数量；本人始终可读取自己的收藏。
+- `email_public` 默认为 `false`，控制公开账号资料是否向其他人显示邮箱；本人通过站内会话可读取自己的私有邮箱。
+- `PATCH` 只接受以上布尔字段，省略的字段保持原值。空对象、`null`、非布尔值或未知字段返回 `400 invalid_payload`。
+- 现有账号使用相同默认值，保留收藏公开、邮箱不公开的原有行为。
+- 隐私设置、当前账号与公开账号资料响应使用 `Cache-Control: no-store`。社区读取账号服务的最新公开设置，不缓存隐私决定。
+
+接受陌生人私信仍由互动服务的 `GET|PUT /api/messages/settings` 管理，见[社区与互动 API](/api-community#私信)。
+
 ## 公开账号资料
 
 ```http
 GET /api/users/{id}   # 匿名可读：某账号的公开资料
 ```
 
-响应 `{ "user": {...}, "stats": {...} }`。以下示例为本人已登录时的投影；查看他人或匿名读取不含 email：
+响应 `{ "user": {...}, "stats": {...} }`。以下示例为本人已登录时的投影；查看他人或匿名读取时，邮箱是否出现由 `email_public` 决定：
 
 ```json
 {
-  "user": { "id": "<uuid>", "username": "moe", "display_name": "Moe", "email": "moe@example.com" },
+  "user": { "id": "<uuid>", "username": "moe", "display_name": "Moe", "email": "moe@example.com", "favorites_public": true, "email_public": false },
   "stats": { "invited_count": 3 }
 }
 ```
 
-- 字段来自 `auth.users`：`id` / `username` / `display_name` / `bio` / `banned` / `email`。不返回账号角色。
+- 字段来自 `auth.users`：`id` / `username` / `display_name` / `bio` / `banned` / `email` / `favorites_public` / `email_public`。两个隐私布尔字段始终返回，不返回账号角色。
 - `avatar_url` / `created_at` 不在这份公开资料投影里。
-- `email` 只在请求者就是本人时下发（带本人令牌或 Cookie）；匿名与看别人都缺省。
+- `email` 在第一方站内会话请求者是本人，或该账号开启 `email_public` 时下发；否则省略字段。PAT、第三方 OAuth 与 ID token 即使 subject 是本人，也只按公开偏好读取这份公开投影。OAuth 的邮箱授权仍由 `userinfo` 的 `email` scope 控制，见[OAuth 接入](/oauth-integration)。
 - `banned` 与管理台 `GET /api/admin/users` 同一口径：只在为真时出现。
 - `stats.invited_count` 是该用户通过自己签发的邀请码成功邀请的人数。
 - 同一个人被同一邀请人的多个码拉进来只算一次；码之后被吊销或过期不回溯扣减，已被封禁的受邀者也计入。

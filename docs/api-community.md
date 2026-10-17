@@ -34,11 +34,15 @@ group: "api"
 | `POST /api/favorites/toggle` | `{target_type, target_id}` → `{favorited}` |
 | `GET /api/favorites/status` | target_type、逗号分隔 target_ids → `{favorited:[id,...]}`；匿名返回空集 |
 | `GET /api/favorites/mine` | 本人收藏，需登录 |
-| `GET /api/users/:id/favorites` | 用户公开收藏，按访问者的实体可见性过滤 |
+| `GET /api/users/:id/favorites` | 用户收藏，检查所有者的公开设置并按访问者的实体可见性过滤 |
 
 target_type 为八种实体 kind。切换前验证目标种类与可见性，并用合并身份归一；目录依赖故障为 503，不能当作目标不存在。
 
-收藏列表支持 target_type、page、page_size，默认 1 / 20，上限 100，越界值取默认，响应 `{items,total}`。
+`/api/favorites/mine`、`/api/favorites/status` 与 `/api/favorites/toggle` 支持站内会话及合法 PAT。当前没有可授予第三方的收藏 OAuth scope，第三方 OAuth 或 ID token 调用这些接口返回 `403 forbidden`；公共收藏与统计接口按公开偏好处理第三方身份，即使 subject 与收藏所有者相同，也不享有本人豁免。
+
+收藏列表支持 target_type、page、page_size，默认 1 / 20，上限 100，越界值取默认。可见列表响应 `{items,total,visible:true}`，包括本人列表。
+
+账号的 `favorites_public` 设置由[账号隐私接口](/api-auth#隐私设置)管理，默认公开。其他人读取 `/api/users/:id/favorites` 时，互动服务每次向账号服务查询最新设置；关闭公开时返回 `{visible:false,items:[],total:0}`，不暴露收藏内容与数量。本人通过站内会话或合法 PAT 读取自己的列表不受该开关影响，仍按实体可见性过滤。列表与收藏状态响应使用 `Cache-Control: no-store`。
 
 ## 用户主页统计
 
@@ -46,9 +50,9 @@ target_type 为八种实体 kind。切换前验证目标种类与可见性，并
 
 - topics_created 是论坛主题数，排除实体短评。
 - comments_created 是楼中回复数，不计主题正文与实体短评。
-- favorites_count 是收藏行数，读取列表仍会按调用者可见性过滤目标。
+- favorites_count 是收藏行数；收藏不公开且请求者不是本人时为 `null`，而非 0。读取列表仍会按调用者可见性过滤目标。
 
-非 UUID 的 id 返回 404；互动服务不检查账号是否存在，没有记录时返回零统计。账号资料见[认证与凭证](/api-auth)，目录贡献见[实体查询与详情](/api-entities)。
+收藏与统计的非本人请求均核对账号服务的公开资料：账号不存在或非 UUID 时返回 `404 not_found`；账号服务不可用、未配置或返回的隐私契约无效时返回 `503 auth_unavailable`，不会默认公开收藏。统计响应使用 `Cache-Control: no-store`。账号资料见[认证与凭证](/api-auth)，目录贡献见[实体查询与详情](/api-entities)。
 
 ## 私信
 
