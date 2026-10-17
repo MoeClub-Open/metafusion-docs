@@ -80,9 +80,11 @@ group: "api"
 | 端点 | 用途 / 权限 |
 | --- | --- |
 | `GET /api/catalog/shelves`、`/shelves/feed` | 公开规则与求值后的作品 |
-| `/api/admin/shelves`、`/:id` | 管理货架，需要 `catalog.shelves.manage` |
+| `GET /api/admin/shelves`、`POST /api/admin/shelves` | 列出或创建货架，需要 `catalog.shelves.manage` |
+| `GET /api/admin/shelves/{id}`、`PUT /api/admin/shelves/{id}`、`DELETE /api/admin/shelves/{id}` | 读取、替换或删除指定货架，需要 `catalog.shelves.manage`；单项读取返回 `data` |
 | `GET /api/catalog/external-databases` | 可用于 external_links 的权威库 |
-| `/api/admin/external-databases`、`/:code` | 管理外部库，需要 `catalog.definitions.manage` |
+| `GET /api/admin/external-databases`、`POST /api/admin/external-databases` | 列出或创建外部库，需要 `catalog.definitions.manage` |
+| `PUT /api/admin/external-databases/{code}`、`DELETE /api/admin/external-databases/{code}` | 替换或删除指定外部库，需要 `catalog.definitions.manage`；字段按 OpenAPI 的 `ExternalDatabase` 与四语名称约束填写 |
 
 货架 query 支持 tags / fields / vocab_terms / relations：条件间 AND，同数组内 OR。空 query 收录全部已发布 Work。sort 为 `updated`、`created` 或 `title`；名称需四语。
 

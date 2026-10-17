@@ -30,7 +30,9 @@ group: "api"
 - `GET /api/catalog/commits/{id}/submission`：原请求、作者、冻结的 before/after 差异及审核回执，仅作者或审核人可读。
 - `POST /api/catalog/commits/{id}/review`：`{"decision":"approve","note":"已核对来源"}` 或 `reject`，需要 `catalog.review.manage`。批准时重新校验相同不可变请求及原作者权限快照，原子应用并把贡献归给原作者；审核人单独留痕。定义或事实冲突保持待审且不改条目。
 
-免审权限 `catalog.review.bypass` 与审核权限独立。目录编辑组默认仍需审核；目录管理员组持有两项权限。旧单对象写接口需要免审权限，不能绕过队列。
+免审权限 `catalog.review.bypass` 与审核权限独立，由账号当前权限组决定。管理员、目录管理员及其他免审账号使用 Key 或 MCP 的已授权编辑操作同样免审，不需要为令牌单独勾选免审；Key 的操作权限仍是账号权限与 scopes 的交集，只读 Key 不允许借本人条目所有权进行写入。目录编辑组默认仍需审核。旧单对象写接口需要账号免审资格及对应操作权限，不能绕过队列。已入队的不可变提交仍须按原 ID 审核，不因后续权限变化自动应用。
+
+审核列表返回 `CommitSubmission[]` 数组；`review_status` 可省略或为 `pending_review` / `reviewed`，其他值返回 `invalid_review_status`。`limit` 默认 20、范围 1–100，非法值回落 20；`offset` 默认 0，非法或负值回落 0。审核请求的 `decision` 必填，只接受 `approve` / `reject`；`note` 可省略，去除首尾空白后最多 2000 个字符。
 
 关系删除操作：`{"target":"relation","action":"delete","id":"<UUID>","base_version":2,"source_refs":[{"source":"official"}]}`。
 

@@ -59,13 +59,14 @@ MCP 服务在客户端撤销 OAuth 连接时调用 `POST /api/auth/mcp-tokens/re
 - `expires_in_days` 省略或为 0 表示永不过期；负数或超过 3650（10 年）返回 `400 invalid_expiry`。
 - `scopes` 是权限码（`catalog.entity.edit` 这类），不是 `read` / `write` 词表。
 - 每个码须格式合法且创建者当前持有；超出本人权限返回 `scope_not_granted: <code>`，不会静默取交集。
-- 新签发或调整 scopes 的个人 PAT 不接受 `mcp.connect`、`*` 或任何以 `.manage` 结尾的权限码，即使本人拥有也返回 `400 forbidden_pat_scope`；管理操作使用具备相应权限的浏览器会话。既有 PAT 不因此自动吊销，有效权限仍按当前账号权限计算。
+- 新签发或调整 scopes 的个人 PAT 不接受 `mcp.connect`、`catalog.review.bypass`、`*` 或任何以 `.manage` 结尾的权限码，即使本人拥有也返回 `400 forbidden_pat_scope`；管理操作使用具备相应权限的浏览器会话。免审由账号当前权限组决定，无需在 Key 上单独授权。既有 PAT 不因此自动吊销，有效操作权限仍按当前账号权限计算。
 - 非法码返回 `invalid_scope: <code>`；重复项去重并保持请求顺序。
 - scopes 必须非空；省略、空数组或去除空白后为空，返回 `invalid_scope: empty`。
 
 ### 有效权限与限额
 
 - 实际权限 = 账号现时权限 ∩ 令牌 scopes，由内省重新计算。交集可以为空：此时令牌仍标识账号，但不能通过任何权限码闸门；没有角色兜底。
+- 目录审核资格单独由内省返回的 `catalog_review_exempt` 表示，取决于账号当前是否持有 `catalog.review.bypass`。管理员、目录管理员及其他具有免审权限的账号，通过个人 Key 或 MCP 提交同样免审；无需重建已有 Key 或连接。操作权限仍逐项受 scopes 限制，只读 Key 即使属于管理员也不能创建、编辑本人条目或审核他人提交。移出免审组后的既有凭据随内省缓存刷新恢复待审，最长 60 秒。
 - 每个账号有效的个人令牌最多 10 张，超出返回 `token_limit_reached`；已撤销、已过期或已删除的不占额度。MCP 委托凭据独立计数，不列入个人 API Key 列表。
 
 ### 编辑、删除与撤销

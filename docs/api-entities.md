@@ -214,6 +214,18 @@ POST /api/catalog/expressions/details
 请求体 `ids` 不能为空且不超过 500 条（`400 invalid_payload` / `400 too_many_ids`）。
 响应含 `items`（按表达聚合，收录以引用 id 呈现）与共享的 `entities` 表。
 
+## 批量身份候选与质量检查
+
+`POST /api/catalog/entities/candidates/batch` 接受 `{"queries":[{"key":"work-a","kind":"work","titles":["题名"]}]}`，一次最多 50 个查询。每项使用前述候选查询的平铺字段，`key` 必须唯一且非空。响应为 `results[]`，保留各项 `key`、`items`、`total`、`complete` 与可能的 `error`；逐项核对，不能把失败或不完整结果当成零候选。
+
+| 接口 | 输入与返回 |
+| --- | --- |
+| `GET /api/catalog/entities/{id}/quality` | 单条只读诊断；可见性与实体详情相同 |
+| `POST /api/catalog/quality/batch` | `{"ids":["<UUID>"]}`，1–100 个实体；返回 `reports[]` 和按 ID 记录的 `errors`，单项失败不代表全批失败 |
+| `GET /api/catalog/entities/stats` | 按生命周期统计条目，需要 `catalog.lifecycle.manage`；包括 deleted/merged，不能作为匿名探索页总数 |
+
+质量报告包含 `entity_id`、`kind`、`status`、`issues[]`、`checks[]` 和定义版本。`status` 为 `complete` / `partial` / `needs_verification`；`checks` 声明实际检查覆盖面。质量诊断只提供建议，不是人工审核结论，不会修改条目或赋予免审资格。
+
 ## 词表、标签、货架与对比
 
 | 端点 | 用途 |

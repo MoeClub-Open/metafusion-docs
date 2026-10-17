@@ -32,9 +32,13 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 
 请求使用 JSON。目录服务拒绝未知字段，请求体上限 2 MiB。响应通常为 JSON，错误形状为 `{"error":"<code>"}`；网关拦下的响应可能使用其他格式。
 
-认证支持 `Authorization: Bearer <token>` 和会话 Cookie `mf_session`。会话、OAuth 和 PAT 的选择及有效权限见[认证与凭证](/api-auth)。目录权限只按令牌中的 `permissions` 判定。
+认证支持 `Authorization: Bearer <token>` 和会话 Cookie `mf_session`。会话、OAuth 和 PAT 的选择及有效权限见[认证与凭证](/api-auth)。操作权限按令牌中的 `permissions` 判定；目录提交的免审资格跟随账号当前权限组，由受信任内省单独传递，不扩大 Key 的操作范围。
 
 交互文档 `/api/docs` 与 `/api/swagger` 需要登录及 `catalog.lifecycle.manage`，第三方接入直接使用公开 OpenAPI。
+
+## 本人的 API 请求日志
+
+`GET /api/catalog/developer/request-logs` 需要登录，只返回调用者本人的记录，响应为 `{"items":[...]}`。可用 `credential` 按凭据名称精确筛选，同名 Key 会归为一组；`limit` 默认 50，HTTP 接口接受 1–100，非法分页参数返回 400。每条记录包含时间、凭据类型/名称、HTTP 方法、路由、状态与耗时，不含令牌或请求正文；读取日志本身不会产生一条新日志。
 
 ## 能力索引
 

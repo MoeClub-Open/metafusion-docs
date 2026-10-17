@@ -27,7 +27,7 @@ group: "api"
 | `catalog.entity.edit` | 创建与编辑实体（含维护公开条目） |
 | `catalog.relation.edit` | 创建 / 替换 / 删除关系 |
 | `catalog.review.manage` | 审核整笔目录提交，不自动获得免审权限 |
-| `catalog.review.bypass` | 本人的提交立即生效；使用旧单对象写接口仍需各操作的编辑权限 |
+| `catalog.review.bypass` | 账号的提交立即生效，Key / MCP 按账号当前免审资格判定，无需委托该码；操作本身仍须满足令牌编辑范围 |
 | `catalog.lifecycle.manage` | 合并与退役条目 |
 | `catalog.definitions.manage` | 检查并保存动态定义与目录配置 |
 | `catalog.shelves.manage` | 维护货架规则 |
