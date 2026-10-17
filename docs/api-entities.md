@@ -224,7 +224,7 @@ POST /api/catalog/expressions/details
 | `POST /api/catalog/quality/batch` | `{"ids":["<UUID>"]}`，1–100 个实体；返回 `reports[]` 和按 ID 记录的 `errors`，单项失败不代表全批失败 |
 | `GET /api/catalog/entities/stats` | 按生命周期统计条目，需要 `catalog.lifecycle.manage`；包括 deleted/merged，不能作为匿名探索页总数 |
 
-质量报告包含 `entity_id`、`kind`、`status`、`issues[]`、`checks[]` 和定义版本。`status` 为 `complete` / `partial` / `needs_verification`；`checks` 声明实际检查覆盖面。质量诊断只提供建议，不是人工审核结论，不会修改条目或赋予免审资格。
+质量报告包含 `entity_id`、`kind`、`status`、`issues[]`、`checks[]` 和定义版本。`status` 为 `complete` / `partial` / `needs_verification`；`checks` 声明实际检查覆盖面。质量诊断可选，只提供建议，不是编辑、提交或应用的前置条件，诊断结果不会阻断这些操作；它不是人工审核结论，不会修改条目或赋予免审资格。
 
 ## 词表、标签、货架与对比
 
