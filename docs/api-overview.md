@@ -48,7 +48,7 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 获取实体详情与当前版本 | `GET /api/catalog/entities/:id` | [实体查询与详情](/api-entities) |
 | 跟随合并与批量解析身份 | `GET .../:id/identity`、`POST /api/catalog/entities/identity` | [实体查询与详情](/api-entities) |
 | 遍历可见的直接关系与属性引用 | `GET .../:id/links`、`POST /api/catalog/relationships/query` | [实体查询与详情](/api-entities) |
-| 读取语义关系与实际收录 | `GET .../:id/relations`、`.../:id/occurrences` | [实体查询与详情](/api-entities) |
+| 读取关联事实与实际收录 | `GET .../:id/links`、`.../:id/occurrences` | [实体查询与详情](/api-entities) |
 | 读取发行目录、表达组成与版本组 | `GET /api/catalog/releases/:id/toc`、`.../:id/editions`、`GET /api/catalog/expressions/:id/composition` | [实体查询与详情](/api-entities) |
 | 批量表达与对比 | `POST /api/catalog/expressions/details`、`GET /api/catalog/compare` | [实体查询与详情](/api-entities) |
 | 获取可编辑工作副本 | `POST /api/catalog/checkout` | [工作副本与提交](/api-commits) |

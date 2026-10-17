@@ -115,13 +115,12 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 GET /api/catalog/entities/:id            # 通用实体详情（含 version，写入时要用）
 GET /api/catalog/entities/:id/resolve    # 合并后跟随 redirect_id 取到保留实体
 GET /api/catalog/entities/:id/identity   # 存活实体与完整历史别名
-GET /api/catalog/entities/:id/relations  # 关系边 + 两端实体表
-GET /api/catalog/entities/:id/links      # 固定结构与语义关系的统一只读投影
+GET /api/catalog/entities/:id/links      # 结构、语义关系与字段引用，含两端实体表
 GET /api/catalog/entities/:id/occurrences # 该实体被哪些发行版收录
 GET /api/catalog/entities/:id/revisions  # 修订历史
 ```
 
-- `/relations` 的响应是 `{ items, entities, subject_id }`：`items` 是关系边，`entities` 是按 id 索引的两端实体（含被查询实体自身），`subject_id` 标出「哪个是自己」
+- `/links` 的 `items` 是统一关系投影，`entities` 是按 id 索引的可见端点与引用实体（含被查询实体自身），`subject_id` 标出「哪个是自己」
 - 客户端据此直接渲染「谁→谁」，不必再逐条取实体
 - `/occurrences` 按 kind 收敛：`expression` 返回自身收录，`content_unit` / `work` 返回其表达被收录的情况
 - `/revisions` 按目标实体逐行过滤可见性；Track 历史快照中的收录也按表达当前可见性裁剪，原始事实仍保留在库中。关系修订的 `target_id` 是关系 id 本身
@@ -135,7 +134,7 @@ GET /api/catalog/entities/:id/revisions  # 修订历史
 
 `POST /api/catalog/entities/identity` 是只读批量解析，请求 `{ids:[...]}`，1–500 项，返回按请求 ID 索引的 `items` 与 `missing`。不可见/不存在进入 missing，数据库故障使整批失败。
 
-`GET /api/catalog/entities/:id/links?limit=50&offset=0` 返回 `{subject_id, definition_etag, items, entities, limit, offset, has_more}`。每项有 key、rule_code、class、direction、两端 ID、排序及可选角色、定位和属性。
+`GET /api/catalog/entities/:id/links?limit=50&offset=0` 返回 `{subject_id, definition_etag, items, entities, limit, offset, has_more}`。每项有 key、rule_code、class、direction、两端 ID、排序及可选角色、定位和属性。普通语义关系的 key 是关系 ID，version 是当前编辑版本；结构与字段引用没有独立可写版本，仍修改其权威字段。
 
 规则从 `definitions.relationship_rules` 发现，覆盖以下事实：
 
