@@ -40,6 +40,7 @@ features:
 | 理解作品、版本和收录之间的区别 | [元数据目录教程](/catalog)、[实体模型与字段](/frbr-model) |
 | 开发客户端、同步脚本或查询工具 | [API 概览](/api-overview)、[实体查询与详情](/api-entities) |
 | 让 Agent 接入平台 | [AI Agent API 与工具规范](/api-agent) |
+| 在站内用 AI 查询、编辑或生成词条介绍 | [AI 助手与生成介绍](/assistant) |
 | 了解社区规则或联系站务 | [社区使用指南](/community-guide)、[联系方式](/contact) |
 
 页面左侧按「开始使用 → 参与共建 → 理解数据 → API 与 Agent 接入 → 条款与支持」分区；页内目录帮助定位具体问题。

@@ -226,11 +226,27 @@ GET /api/users/{id}   # 匿名可读：某账号的公开资料
 | `GET /api/admin/permissions`（权限码清单） | `auth.groups.manage` |
 | `GET\|PUT /api/admin/settings`（实例设置） | `auth.settings.manage` |
 | `GET\|POST /api/admin/invites`、`POST /api/admin/invites/:code/revoke` | `auth.invites.manage` |
+| `GET /api/admin/credentials`、`PATCH\|DELETE /api/admin/credentials/:id`、`POST /api/admin/credentials/:id/revoke` | `auth.users.manage` |
 | `/api/admin/oauth/*`（客户端治理、吊销令牌、审计） | `auth.oauth.manage` |
 
 管理员创建账号用 `POST /api/admin/users`（`{ username, email, password }`）。新账号的能力由权限组决定。
 
 授权判定只看权限组下发到令牌的 `permissions`；空权限不授予任何管理能力。`GET /api/admin/users` 的每一项带 `banned`（仅当为真时下发）。
+
+### 全站凭据与 OAuth 台账
+
+`GET /api/admin/credentials` 跨用户列出个人 API Key/PAT 与 MCP 委托凭据，可按 `owner_id`、`kind=pat|mcp`、`status=active|revoked|expired|disabled` 筛选。`PATCH /api/admin/credentials/:id` 修改 `name/scopes`，`POST .../:id/revoke` 撤销并保留记录，`DELETE .../:id` 删除。管理写操作要求站内会话，继续校验管理者、凭据所有者和原授权范围；MCP 权限只能缩减。
+
+OAuth 台账需要 `auth.oauth.manage`：
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `GET /api/admin/oauth/grants` | 跨用户授权列表，按 `owner_id/client_id`、`status=active|inactive` 筛选 |
+| `POST /api/admin/oauth/grants/revoke` | 请求 `{user_id,client_id}`，撤销该授权的有效令牌与未兑换授权码，保留历史 |
+| `GET /api/admin/oauth/tokens` | OAuth 令牌元数据，按 `owner_id/client_id`、`status=active|expired|disabled` 筛选 |
+| `DELETE /api/admin/oauth/tokens/:id` | 撤销并删除指定令牌，保留操作记录 |
+
+以上列表支持 `limit/offset` 分页，仅返回元数据；不返回凭据或令牌明文、哈希。OAuth 令牌使用独立 UUID 标识，不能用令牌内容作为路径 ID。
 
 ### 账号封禁
 

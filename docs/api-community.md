@@ -134,6 +134,8 @@ detail 最多 2000 字符，evidence_url 为 HTTP(S) 绝对地址、最多 500 �
 | 举报队列与详情 | `GET /api/community/admin/reports`、`/:id` | community.report.review |
 | 受理 / 驳回 / 处置 | `POST .../reports/:id/accept|reject|resolve` | community.report.review |
 | 申诉队列 / 审核 | `GET /api/community/admin/appeals`、`POST .../:id/review` | community.report.review |
+| 通知投递台账 / 到期重试 | `GET /api/community/admin/notifications/outbox`、`POST .../outbox/retry` | community.report.review |
+| 跨用户收藏台账 / 删除 | `GET\|DELETE /api/community/admin/favorites` | community.report.review |
 
 板块配置只更新传入字段，code 不可改；names 需四语，descriptions 可用四语空值清空。可配置 color、icon、sort_order、is_enabled、show_in_feed。
 
@@ -142,3 +144,15 @@ detail 最多 2000 字符，evidence_url 为 HTTP(S) 绝对地址、最多 500 �
 举报队列支持 status、target_type、q、page、page_size；详情含 events、appeals、target_present。驳回需 note，处置需 enforcement / note，enforcement 为 none / content_removed / user_banned；申诉审核状态为 accepted / rejected，并需 note。
 
 content_removed 要求先通过既有删除端点移除本地内容；仍存在时返回 `409 content_still_present`。user_banned 只登记结论，封禁在账号服务执行。实体和资源不支持 content_removed。
+
+### 通知投递台账
+
+后台通知页读取 `GET /api/community/admin/notifications/outbox`，可按 `status=pending|sent|failed|expired` 筛选；省略表示全部。使用 `page/page_size` 分页，默认 1 / 20、每页最多 100，返回 `{items,total}`。记录包含收件人、事件与关联对象、投递状态、尝试次数、下一次重试时间、过期时间和最近错误。
+
+`POST /api/community/admin/notifications/outbox/retry` 无需请求体，返回 `{ok:true,retried,sent,expired}`。它在全局队列领取最多 50 条已到期且未过期的 pending 记录，不受当前列表筛选影响；failed/expired 终态不重新投递。触发成功不表示所有通知均已送达，应核对 sent 与后续台账。
+
+### 收藏治理
+
+`GET /api/community/admin/favorites` 支持 `page/page_size` 和可选 `owner_id/target_type/target_id`，三个筛选按精确条件共同匹配。响应 `{items,total}`，每项为 `{owner_id,target_type,target_id,created_at}`。这是本地收藏原始记录台账，不依赖目录解析或目标当前可见性，因此能处置已删除或合并目标留下的记录；公开收藏接口继续按访问者的可见性过滤。
+
+`DELETE /api/community/admin/favorites?owner_id=<UUID>&target_type=<kind>&target_id=<UUID>` 要求三个键齐全，按复合身份精确删除，成功返回 204，不存在返回 404，并记录管理审计。`target_type` 为八种实体 kind；本接口不通过当前管理员的收藏切换操作代替删除他人记录。

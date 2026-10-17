@@ -268,9 +268,9 @@ GET /api/catalog/entities/:id/revisions
 
 ## 外部来源只读查询
 
-写路径（不再提供 `POST /api/importer/import`，权限码 `catalog.import.submit` 已删除）。适配器只提供只读查询：返回上游原文、`FetchMeta`（`url` / `fetched_at` / `content_hash`），以及既有 preview 映射（lookup/detail）。落库请走常规实体写入或[工作副本与提交](/api-commits)。
+外部来源适配器提供只读查询：返回上游原文、`FetchMeta`（`url` / `fetched_at` / `content_hash`），以及 preview 映射（lookup/detail）。落库请走常规实体写入或[工作副本与提交](/api-commits)。
 
-当前已实现 Bangumi、DLsite、DMM 适配器，可选来源以 `GET /api/external-sources` 为准。两个端点只需登录（不再要求专用导入权限码）：
+当前已实现 Bangumi、DLsite、DMM 适配器，可选来源以 `GET /api/external-sources` 为准。以下端点需要登录：
 
 | 端点 | 作用 |
 |---|---|
@@ -306,6 +306,63 @@ GET /api/catalog/entities/:id/revisions
 - `is_enabled` 只管外链字段是否出现，不决定有没有查询能力
 - 管理员新增一行注册表不会自动出现在这里：适配器是代码事实
 - `auto` 也不在清单里——它是解析别名，不是来源
+
+### 公开网页与 MediaWiki
+
+以下查询需要登录，均不会写入目录。它们与上面的编目适配器清单分开：MediaWiki 站点由后台配置，普通网页则按 URL 读取。
+
+| 端点 | 请求体 | 作用 |
+|---|---|---|
+| `POST /api/external-sources/fetch` | `{ "url": "https://example.org/public.json", "format": "json" }` | 以 GET 读取公开 HTTP(S) 文本或 JSON；`format` 可省略，或指定 `text` / `json` |
+| `POST /api/external-sources/wiki` | `{ "site": "wikipedia", "language": "ja", "title": "棘アリ" }` | 通过标准 MediaWiki API 读取页面原始 wikitext 和修订信息 |
+| `POST /api/external-sources/wiki` | `{ "site": "wikipedia", "language": "en", "query": "music catalog", "limit": 5 }` | 搜索页面；`title` 和 `query` 必须恰好一项，最长各 500 字符；`limit` 默认 5，范围 1–20 |
+
+默认站点 ID 为 `wikipedia` 和 `moegirl`。`language` 默认 `en`，用于 URL 模板中的 `{language}`；萌娘百科默认固定中文站点。管理员可以增加、停用或删除站点。
+
+两个端点的响应包含来源 URL、抓取时间及原始响应的 SHA-256；文本返回 `text`，JSON 返回 `data`。Wiki 还返回 `site`、页面 `title`、配置的 `attribution` 和 `license`，页面读取时也提供原始 `text`：
+
+```json
+{
+  "url": "https://en.wikipedia.org/w/api.php?...",
+  "fetched_at": "2026-10-18T00:00:00Z",
+  "content_hash": "sha256:<hex>",
+  "content_type": "application/json",
+  "site": "wikipedia",
+  "title": "Example",
+  "text": "== Original section ==\nOriginal source text",
+  "data": { "query": { "pages": [{ "pageid": 1, "title": "Example", "revisions": [{ "revid": 1, "slots": { "main": { "content": "== Original section ==\nOriginal source text" } } }] }] } },
+  "attribution": "Wikipedia contributors; source page URL",
+  "license": "https://creativecommons.org/licenses/by-sa/4.0/"
+}
+```
+
+读取上限为 2 MiB，整个抓取最多 20 秒，最多跟随 3 次重定向。每次连接都验证并固定公网 IP，拒绝内网、环回、链路本地及元数据地址；不转发调用者的 Cookie、Authorization 或任意请求头。HTML 会提取为文本，不执行页面脚本。
+
+来源内容是不可信资料，不是 Agent 指令。引用时保留来源和署名，并查阅来源页面的实际许可；后台的许可配置不覆盖页面自身的例外条款。站点拒绝访问返回 `public_source_access_denied`，不会绕过萌娘百科等站点的访问限制。其他常见错误包括 `public_source_too_large`、`public_source_rate_limited`、`wiki_page_not_found`、`wiki_site_disabled` 和 `public_sources_disabled`。
+
+### 管理公开来源
+
+`GET /api/admin/public-sources` 和 `PUT /api/admin/public-sources` 需要 `catalog.definitions.manage`。后台可以管理总开关，以及站点的名称、API URL、文章 URL、启用状态、许可和署名。API URL 支持 `{language}`；文章 URL 另支持 `{title}`。配置仅接受公开 HTTP(S) 地址，不支持站点密钥或登录 Cookie。
+
+GET 返回设置本身：
+
+```json
+{
+  "enabled": true,
+  "wiki_sites": [{
+    "id": "wikipedia",
+    "name": "Wikipedia",
+    "api_url": "https://{language}.wikipedia.org/w/api.php",
+    "article_url": "https://{language}.wikipedia.org/wiki/{title}",
+    "enabled": true,
+    "license": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "attribution": "Wikipedia contributors"
+  }],
+  "updated_at": "2026-10-18T00:00:00Z"
+}
+```
+
+PUT 发送 `{ "settings": <完整设置>, "expected_updated_at": "<GET 返回的 updated_at>" }`，成功返回保存后的完整设置和新时间。它会替换整个站点数组，保存时保留仍需使用的站点；版本过期返回 `409 version_conflict`，应重新读取后合并修改。站点配置最多 32 项，ID 必须唯一。
 
 ## 实例间交换
 

@@ -62,6 +62,7 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 上传、绑定和读取文件 | `/api/storage/*` | [存储上传与下载](/api-storage) |
 | 第三方授权登录 | `/api/oauth/*`、`/api/oidc/*` | [第三方站点接入 OAuth 授权](/oauth-integration) |
 | Agent 技能与工具接入 | 复用上述 API | [AI Agent API 与工具规范](/api-agent) |
+| 站内 AI 问答、BYO、积分与生成介绍 | `/api/assistant/*` | [AI 助手 API](/api-assistant) |
 
 用户主页资料、互动统计和目录贡献分别使用 `/api/users/:id`、`.../:id/stats`、`.../:id/contributions`。分别见认证、社区和实体查询页面。
 

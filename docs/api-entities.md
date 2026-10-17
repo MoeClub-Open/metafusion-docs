@@ -241,6 +241,19 @@ POST /api/catalog/expressions/details
 - `shelves/feed` 的 `per_shelf` 默认 12、上限 100；登录用户按其首页偏好合并、重排与隐藏，每条 `shelf` 带 `source`（`system` / `custom`）
 - compare 需要 2–6 个实体，越界返回 `compare_requires_two_to_six`。每项使用 `entity`；Release/Medium 的载体树在 `children` 中，每项为 `{medium, tracks}`。
 
+## 后台条目与请求台账
+
+以下只读端点需要 `catalog.lifecycle.manage`，第三方 OAuth 身份不可调用：
+
+| 端点 | 查询参数与用途 |
+| --- | --- |
+| `GET /api/admin/catalog-entities` | 全量条目台账；`state=active|deleted|merged`、`kind`、`q`，不传 state 包含全部生命周期 |
+| `GET /api/admin/catalog-request-logs` | 跨用户目录 API 日志；`user_id`、凭据显示名 `credential`、HTTP `status`、路由子串 `path` |
+
+两者使用 PostgreSQL 计数与稳定排序，不依赖搜索索引；支持 `limit`（默认 50、范围 1–100）与 `offset`，返回 `items/total/limit/offset/has_more`。条目 q 按原名、翻译名或 UUID 做不区分大小写的字面子串匹配。公共条目列表仍排除 deleted/merged，不能用其代替后台台账。
+
+日志只记录已认证调用，保留 30 天，包含账号、凭据类型与名称、时间、方法、路由模板、响应状态和耗时；不包含令牌、请求头、正文、查询串或路由内实体 ID。本人开发者日志仍仅返回本人的记录。
+
 ## 用户贡献流
 
 用户主页的贡献视图（前端 `all` / `revisions` / `works` / `releases` / `artists` 五个 tab）由目录服务提供：

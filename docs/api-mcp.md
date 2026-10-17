@@ -50,6 +50,7 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 | metafusion_file_inspect / upload | 根据 Agent 提供的 URL 或内容，在云端计算摘要、上传并绑定文件 |
 | metafusion_web_search | 全网搜索，返回标题、URL、摘要与抓取证据；与站内 metafusion_search 分开 |
 | metafusion_http_request | 显式请求公开 HTTP(S) 网页/API，支持查询、第三方请求头和 JSON/text/base64 载荷 |
+| metafusion_wiki | 通过平台配置的 MediaWiki 公开接口搜索或读取 Wikipedia、萌娘百科原文，保留修订、来源、许可与署名 |
 
 动态字段仍以 definitions 为准，分页、冲突码和失败结果沿用原生 API。普通编目先查候选、checkout、构造提交、preview，再显式 push；封存载荷保留 30 天。提交证据：每条 source 必须有唯一 `key`，每个操作必须有 `source_refs`（旧格式无兼容，见[提交协议](./api-commits.md)）。未知推送结果用同 ID 查回执；真实冲突需重新取舍和 rebase。
 
@@ -64,6 +65,18 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 ```json
 {"q":"发行商 官方 作品目录","limit":5}
 ```
+
+已知 Wiki 页面可直接调用 `metafusion_wiki`。`title` 与 `query` 必须恰好提供一项；站点、URL 模板与许可由目录后台的公开来源配置维护：
+
+```json
+{"site":"wikipedia","language":"ja","title":"音楽"}
+```
+
+```json
+{"site":"moegirl","query":"音楽","limit":5}
+```
+
+返回原始页面或搜索结果及 `url`、`fetched_at`、`content_hash`、`attribution`、`license`。接口不写入目录；使用原文须保留署名与许可，来源拒绝访问时明确返回错误。
 
 调用 `metafusion_web_search` 后，从结果选择原始资料，再调用 `metafusion_http_request`：
 
