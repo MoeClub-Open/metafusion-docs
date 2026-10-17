@@ -24,7 +24,7 @@ jobs:
       # 用 npm ci 才能按已提交的锁文件做可复现安装。
       - uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
       - name: npm ci
         run: npm ci

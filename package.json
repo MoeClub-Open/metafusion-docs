@@ -11,15 +11,14 @@
     "start": "sirv site --port 3001 --host 0.0.0.0 --gzip --brotli"
   },
   "dependencies": {
-    "sirv-cli": "^3.0.0"
+    "sirv-cli": "^3.0.1"
   },
   "devDependencies": {
-    "vitepress": "^1.6.3"
+    "vitepress": "^1.6.4"
   },
   "overrides": {
     "vitepress": {
-      "vite": "6.4.3",
-      "esbuild": "0.25.0"
+      "vite": "6.4.3"
     }
   }
 }
