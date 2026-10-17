@@ -14,7 +14,7 @@ group: "api"
 1. `POST /api/catalog/checkout`：传 `entity_ids`、`relation_ids`，合计最多 100 个。返回同一只读快照中的完整可见文档、version、当前 `definitions_etag` 和 `actor_id`。空数组用于初始化工作区。Track 的隐藏收录不会出现在副本中。
 2. 本地编辑 JSON，保留基线。新实体先按下文查重；创建依赖用 `{"$ref":"名称"}` 对象，不能伪造 UUID。
 3. 本地 commit：保存不可变请求、证据与固定 UUID。一个工作区保留一个待推送提交，各 Agent 使用独立目录。
-4. `POST /api/catalog/commits/preview`：真实校验后整笔回滚；返回 `applied:false`，不保留实体、修订、通知或搜索事件。预览 ID 不可用于后续引用。
+4. `POST /api/catalog/commits/preview`：返回修改前后差异，真实校验后整笔回滚，不自动运行质检；返回 `applied:false`，不保留实体、修订、通知或搜索事件。预览 ID 不可用于后续引用。
 5. `POST /api/catalog/commits`：普通提交返回 `202` / `pending_review`，只保存提交和冻结差异；不改变条目、版本、修订、通知或搜索事件。具有 `catalog.review.bypass` 时返回 `200` 并原子应用事实、修订、通知、搜索 outbox 与回执。每批 1–100 个操作，请求体最多 2 MiB，按声明顺序满足引用依赖。
 6. `GET /api/catalog/commits/{id}`：原操作者或审核人查询持久回执（HTTP 200）。已生效后重新 checkout，获得可能已被其他编辑者推进的当前版本。
 

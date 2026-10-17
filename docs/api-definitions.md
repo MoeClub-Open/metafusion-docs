@@ -29,7 +29,7 @@ group: "api"
 
 实体属性的可写范围来自 `fields.<code>.applicable_kinds`；空集合表示该字段只供关系或内嵌结构使用。标签不决定可写范围。
 
-组字段与列表支持嵌套结构。列表筛选需叶子字段 `searchable=true` 且沿途字段启用，查询例子见[实体查询与详情](/api-entities)。
+组字段与列表支持嵌套结构。单条记录使用 `group`，重复记录使用 `list`；可选组可以整体省略，提供组对象后才校验组内必填字段，不必仅为可选性额外套一层列表。列表筛选需叶子字段 `searchable=true` 且沿途字段启用，查询例子见[实体查询与详情](/api-entities)。
 
 `locator`、`subject_attributes` 和 `inclusion_attributes` 使用组字段与 schemes：
 
