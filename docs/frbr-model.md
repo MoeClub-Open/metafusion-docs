@@ -29,7 +29,8 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | 字段 | 说明 |
 | --- | --- |
 | `id` / `kind` | UUID 与固定种类 |
-| `version` / `status` | 乐观锁版本与生命周期状态 |
+| `version` / `state` | 乐观锁版本与生命周期（active / deleted / merged） |
+| `review_status` | 已生效条目只读审核标记 reviewed；待审状态属于提交 |
 | `title` / `original_language` | 基础题名与原始语言 |
 | `translations` | 按语言标签分组的对象，各项含 `title`、简短纯文本 `summary`、Markdown 条目正文 `body`、`aliases`；正文与实体共同修订 |
 | `attributes` | 动态属性，允许键及适用种类由 definitions 决定 |
@@ -65,7 +66,7 @@ Release 没有 `work_id`，通过 `subjects[]` 声明收录了哪些作品：
 {"work_id": "<work_uuid>", "role": "primary", "position": 0, "attributes": {}}
 ```
 
-`role` 使用 definitions 中 `release_role` 词表的当前启用词项；`primary`、`compilation`、`supplement` 是种子示例，不是封闭枚举。同一作品同一角色只保留一项。
+`role` 使用 definitions 中 `release_role` 词表的当前启用词项；`primary`（主作品）、`track_work`（曲目作品）、`compilation`（汇编作品）、`supplement`（附加作品）是种子示例，不是封闭枚举。同一作品同一角色只保留一项；正常收录的曲目不因缺少词项而标为特典。
 
 Track 的 `contents[]` 是实际收录的权威来源：
 
@@ -95,6 +96,6 @@ definitions 声明的实体属性引用也投影为 reference 链接，支持嵌
 
 ## 状态与修订
 
-状态包括 `draft`、`pending_review`、`published`、`deleted`、`merged`。发布要求至少一条语言资料，可见性见[API 概览](/api-overview)。
+生命周期 `state` 只有 `active`、`deleted`、`merged`，没有草稿或发布状态。正常条目至少有一条语言资料，`review_status=reviewed` 为只读标记。普通提交进入审核队列，审核期间不改变当前条目内容、版本和标记；免审提交立即生效，见[工作副本与提交](/api-commits)。可见性见[API 概览](/api-overview)。
 
 每次写入带修改说明与来源，保留修订快照。合并、停用和下架通过专用生命周期入口执行；载荷与错误处理见[新建与编辑](/api-edit)。

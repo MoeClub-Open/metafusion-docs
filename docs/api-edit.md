@@ -241,7 +241,7 @@ POST /api/catalog/entities/:id/lifecycle
   "sources": [{ "kind": "url", "citation": "两个条目指向同一实体的官方出处", "url": "https://example.com" }] }
 ```
 
-- 带 `target_id` 为合并：目标必须同 kind、同归属（`work_id` / `release_id` / `medium_id` / `content_unit_id` / `parent_id` 一致）且已发布，否则 `400 invalid_merge_target`
+- 带 `target_id` 为合并：目标必须同 kind、同归属（`work_id` / `release_id` / `medium_id` / `content_unit_id` / `parent_id` 一致）且 `state=active`，否则 `400 invalid_merge_target`
 - 合并后源实体状态置 `merged` 并写入 `redirect_id`，指向它的关系与结构引用会被改写
 - 旧 id 用 `GET /api/catalog/entities/:id/resolve` 跟随到保留实体
 - 不带 `target_id` 为退役：状态置 `deleted`
