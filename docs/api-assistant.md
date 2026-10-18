@@ -53,7 +53,7 @@ group: "api"
 }
 ```
 
-新会话省略 `conversation_id`；省略 `model_id` 时使用会话或站点默认模型。省略 `credential_id` 时沿用会话的凭据，显式传 `"credential_id":""` 切回平台额度。`message` 必须为非空 UTF-8，最多 32768 字节。
+新会话省略 `conversation_id`；省略 `model_id` 时使用会话或站点默认模型。省略 `credential_id` 时沿用会话的凭据，显式传 `"credential_id":""` 切回积分计费。`message` 必须为非空 UTF-8，最多 32768 字节。
 
 返回 `conversation_id`、`answer`、累计 `usage`、`credits_spent`、`balance`，以及可选 `tool_results`、`commit_receipts`、`error`。工具可读取定义、实体、身份候选、关系、工作副本和公开来源，修改统一在服务器工作副本中 stage、commit、push。普通账号发起 PR，免审账号可直接合入；不要求来源池、source_refs 或查证记录。不提供任意 SQL、任意身份或绕过审核参数。
 
@@ -71,6 +71,8 @@ group: "api"
 | `DELETE /conversations/:id` | 删除未在执行中的本人会话 |
 
 ## Token、价格与预算
+
+`POST /context` 免费预览下一轮上下文，使用本人登录身份。请求为必填 `model_id`，以及可选 `conversation_id`、`message`（未发送草稿，最多 32768 个 UTF-8 字节）。会话只能属于本人；响应包含 `input_tokens_bound`、`context_window`、`max_output_tokens`、`message_count`、`tool_count`、`estimated=true`。输入上界包含最新系统提示、已保存消息、草稿、工具定义及协议开销，与实际调用的上限判据共用实现；这不是供应商返回的 token 用量，也不是历史调用的累计数。预览不保存草稿、不调用模型、不预留或消耗积分。
 
 `usage` 包含 `input_tokens`、`output_tokens`、`cached_input_tokens`，缓存输入是输入总量的一部分，不能再相加作为总 token。用量记录保存 `price_snapshot`、`credits`、`cost_microusd`、`status`、`usage_estimated` 与结算时间，之后修改模型费率不改写历史结算。
 
