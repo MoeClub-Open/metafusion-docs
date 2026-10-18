@@ -222,7 +222,7 @@ GET /api/users/{id}   # 匿名可读：某账号的公开资料
 ```
 
 - 字段来自 `auth.users`：`id` / `username` / `display_name` / `bio` / `banned` / `email` / `favorites_public` / `email_public`。两个隐私布尔字段始终返回，不返回账号角色。
-- `avatar_url` / `created_at` 不在这份公开资料投影里。
+- 已设置头像时返回 `avatar_url`，是带版本号的同源图片地址；未设置时缺省。`created_at` 不在此投影中。
 - `email` 在第一方站内会话请求者是本人，或该账号开启 `email_public` 时下发；否则省略字段。PAT、第三方 OAuth 与 ID token 即使 subject 是本人，也只按公开偏好读取这份公开投影。OAuth 的邮箱授权仍由 `userinfo` 的 `email` scope 控制，见[OAuth 接入](/oauth-integration)。
 - `banned` 与管理台 `GET /api/admin/users` 同一口径：只在为真时出现。
 - `stats.invited_count` 是该用户通过自己签发的邀请码成功邀请的人数。
@@ -321,3 +321,11 @@ curl --fail-with-body "$METAFUSION_BASE_URL/api/catalog/entities?kind=work&limit
 - [第三方站点接入 OAuth 授权](/oauth-integration)：授权码 + PKCE 的完整流程与示例代码
 - [API 概览](/api-overview)：目录服务的错误码与限流
 - [新建与编辑](/api-edit)：写入所需的权限码与证据字段
+
+### 设置头像
+
+- `PUT /api/auth/avatar`：登录后上传本人头像，multipart 字段名为 `avatar`。服务端接收最多 2 MiB 的 PNG/JPEG/GIF，校验像素尺寸并重新编码，返回 `avatar_url`。
+- `DELETE /api/auth/avatar`：移除本人头像，返回空 `avatar_url`。
+- `GET /api/users/{id}/avatar?v={version}`：公开读取头像，支持 ETag / If-None-Match。不存在或版本不匹配返回 404。
+
+网页设置页提供选图、居中裁剪预览、保存和移除，支持最多 10 MB 的 PNG/JPEG/WebP/GIF 原图，统一转换成 512×512 PNG 上传。个人主页和顶栏会在保存后显示新头像。

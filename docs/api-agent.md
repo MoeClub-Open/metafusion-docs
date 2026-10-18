@@ -112,3 +112,9 @@ push 后检查 `applied`、`commits` 与 `pull_request`。普通账号获得 PR�
 | 数据库故障或无法解释的协议差异 | 保留请求摘要和任务进度，停止依赖故障的写入，报告已完成范围 |
 
 未知机器码先核对实例契约；仍无法解释时报告差异，不绕过接口直接改库。
+
+## 通知与贡献筛选
+
+`GET /api/notifications` 支持 `category=discussion|catalog|review|system`、`read=unread|read` 和 `from` / `to`（UTC 日期 `YYYY-MM-DD`，两端均包含）。空值不过滤；`total` 是筛选后的数量，`unread` 是本人全部未读数。分页使用 `limit` / `offset`，收件人始终取当前登录身份。
+
+`GET /api/users/{id}/contributions` 的 `from` / `to` 必须落在所选 `year` 内，只筛选活动列表及 `total`；年度统计与日历继续描述全年。网页可以点选贡献日历或输入日期范围，翻页保留筛选。
