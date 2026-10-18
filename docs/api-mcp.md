@@ -17,7 +17,7 @@ MCP 将 MetaFusion API 和编目技能提供给 Agent。支持 Streamable HTTP �
 
 实际配置字段以客户端为准。端点使用 OAuth 授权码、PKCE S256 与 refresh token；客户端根据发现文档注册。只把 MCP 签发的资源绑定令牌发往 MCP，不直接粘贴账号会话或 PAT。
 
-MCP 与[技能仓库](https://github.com/MoeclubM/metafusion-skills)提供的是同一套编目规范，区别只在入口：技能是可复制到 Agent 技能目录的文档与本地工具，需要 Node.js 或 Python；MCP 是云端入口，提供认证、技能与手册读取、提交封存与工具调用，不需要终端和本地文件系统。按运行环境选一个即可，也可以并存。可直接复制给 Agent 的启动提示词见 [AI Agent API 与工具规范](/api-agent#给-agent-的启动提示词)。
+MCP 与[技能仓库](https://github.com/MoeclubM/metafusion-skills)提供的是同一套编目规范，区别只在入口：技能是可复制到 Agent 技能目录的文档与本地工具，需要 Node.js 或 Python；MCP 是云端入口，提供认证、技能与手册读取、工作副本与工具调用，不需要终端和本地文件系统。按运行环境选一个即可，也可以并存。可直接复制给 Agent 的启动提示词见 [AI Agent API 与工具规范](/api-agent#给-agent-的启动提示词)。
 
 ## 授权与额度
 
@@ -33,7 +33,7 @@ MCP 与[技能仓库](https://github.com/MoeclubM/metafusion-skills)提供的是
 
 MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及共享计数见[API 概览](/api-overview#限流)，互动和存储的范围见各自协议。一次工具调用可能发出多个业务请求；免限流也不免权限与数据校验，配置值不能证明并发承载能力。
 
-目录提交免审跟随账号当前权限组。管理员或其他免审账号通过已有 MCP 连接执行已授权的编辑操作时直接生效，不需要单独请求免审 scope 或重新授权；只读连接仍不能写入。撤回账号免审资格后，既有连接随内省缓存刷新恢复待审，最长 60 秒。
+目录提交免审跟随账号当前权限组。管理员或其他免审账号通过已有 MCP 连接 push 已授权的编辑时可直接合入，不需要单独请求免审 scope 或重新授权；只读连接仍不能写入。撤回账号免审资格后，既有连接随内省缓存刷新后 push 走 PR，最长 60 秒。
 
 客户端撤销 OAuth 访问或刷新令牌时，会同步撤销该连接并清理上游委托凭据；账号服务暂不可达时保留待清理状态，可在管理页重试，不重新授权、不创建新凭据。MCP 授权撤销后下一次请求被拒绝，正在执行的请求可能完成；改变账号或委托凭据权限后，业务服务最多有 60 秒内省缓存。
 
@@ -44,15 +44,19 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 | metafusion_api_call | 调用现有公共 API：搜索、创建与编辑实体、关系、定义、只读外部来源查询、通知、互动、存储和已授权的管理操作；支持 JSON、查询参数、base64 与 multipart |
 | metafusion_api_contract | 当前目录 OpenAPI 与具体操作模式 |
 | metafusion_reference | 云端读取版本锁定的技能或其他子系统 API 手册 |
-| metafusion_search / relationships / candidates / checkout | 常用查询、候选核查与版本快照 |
-| metafusion_commit_prepare / commit | 云端生成提交 ID、封存载荷、预览、推送与回执恢复 |
-| metafusion_commit_preview / commit_push | 直接传入完整原生提交载荷 |
+| metafusion_search / relationships / candidates | 常用查询与候选核查 |
+| metafusion_workspace_create / list / get / edit / checkout / members | 创建和维护服务器副本，加入记录与协作者 |
+| metafusion_workspace_stage / commit / commits / push / rebase | 多次暂存、不可变提交、推送与三方冲突解决 |
+| metafusion_pull_request_create / list / get / edit / merge | 创建、审阅和合并 PR |
+| metafusion_commit_get | 读取不可变提交及其合入状态 |
 | metafusion_file_inspect / upload | 根据 Agent 提供的 URL 或内容，在云端计算摘要、上传并绑定文件 |
 | metafusion_web_search | 全网搜索，返回标题、URL、摘要与抓取证据；与站内 metafusion_search 分开 |
 | metafusion_http_request | 显式请求公开 HTTP(S) 网页/API，支持查询、第三方请求头和 JSON/text/base64 载荷 |
 | metafusion_wiki | 通过平台配置的 MediaWiki 公开接口搜索或读取 Wikipedia、萌娘百科原文，保留修订、来源、许可与署名 |
 
-动态字段仍以 definitions 为准，分页、冲突码和失败结果沿用原生 API。普通编目先查候选、checkout、构造提交、preview，再显式 push；封存载荷保留 30 天。提交证据：每条 source 必须有唯一 `key`，每个操作必须有 `source_refs`（旧格式无兼容，见[提交协议](./api-commits.md)）。未知推送结果用同 ID 查回执；真实冲突需重新取舍和 rebase。
+动态字段仍以 definitions 为准，分页、冲突码和失败结果沿用原生 API。编辑先创建 workspace，按需 checkout，再多次 stage 和 commit，最后 push。stage 传 `expected_version` 与 `operations`；commit 传固定 `id`、`expected_version` 与 `message`；push 传 `expected_version`、`expected_head` 和可选 `title`。普通账号获得 PR，免审账号可直接合入。完整载荷见[工作副本与提交](/api-commits)。
+
+来源与查证记录可省略，不要求来源池、每操作 source_refs 或候选确认。未知结果回读原 commit、workspace 与 PR，不重复创建。真实冲突比较基线、正式值与副本值，明确解决后 rebase，再 push。未合入的私有活动不进入公开贡献流。
 
 文件 URL 必须是服务端可访问的公开 HTTPS 地址。URL 文件上限 1 GiB；base64 受 8 MiB 请求体上限约束。工具失败时保留 asset_id，检查原生存储状态后再处理。
 

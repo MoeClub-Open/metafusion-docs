@@ -1,145 +1,144 @@
 ---
 title: "工作副本与提交"
-description: "Agent 批量编辑、原子推送、三方合并与失败恢复。"
+description: "服务器工作副本、多次提交、推送、PR 与并发冲突处理。"
 order: 45
 group: "api"
 ---
 
 # 工作副本与提交
 
-多个 Agent 可以从各自的版本副本编辑，在本地形成提交，再一次推送一批实体与关系。每个实体保留自己的版本历史；提交将相关修订串在一起，没有全站共同移动的 head，也不为每个条目创建物理 Git 仓库。当前实现提供 Git 式编辑流程，原生 Git 协议尚未接入。
+目录编辑使用服务器上的工作副本。保存修改、创建 commit 都不改变公开条目；push 后，免审账号直接合入，其他账号创建或更新 PR，由有权限的成员合并。一个副本可以包含多个实体、关系和 Track 收录，也可以连续产生多个 commit。
 
-## 从副本到推送
+这是目录记录的协作协议，不使用原生 Git 传输或文件系统分支。实体保留自己的版本；commit 将相关修改和作者串在一起，PR 表达一次待合入的任务。
 
-1. `POST /api/catalog/checkout`：传 `entity_ids`、`relation_ids`，合计最多 100 个。返回同一只读快照中的完整可见文档、version、当前 `definitions_etag` 和 `actor_id`。空数组用于初始化工作区。Track 的隐藏收录不会出现在副本中。
-2. 本地编辑 JSON，保留基线。新实体先按下文查重；创建依赖用 `{"$ref":"名称"}` 对象，不能伪造 UUID。
-3. 本地 commit：保存不可变请求、证据与固定 UUID。一个工作区保留一个待推送提交，各 Agent 使用独立目录。
-4. `POST /api/catalog/commits/preview`：返回修改前后差异，真实校验后整笔回滚，不自动运行质检；返回 `applied:false`，不保留实体、修订、通知或搜索事件。预览 ID 不可用于后续引用。
-5. `POST /api/catalog/commits`：普通提交返回 `202` / `pending_review`，只保存提交和冻结差异；不改变条目、版本、修订、通知或搜索事件。具有 `catalog.review.bypass` 时返回 `200` 并原子应用事实、修订、通知、搜索 outbox 与回执。每批 1–100 个操作，请求体最多 2 MiB，按声明顺序满足引用依赖。
-6. `GET /api/catalog/commits/{id}`：原操作者或审核人查询持久回执（HTTP 200）。已生效后重新 checkout，获得可能已被其他编辑者推进的当前版本。
+## 编辑流程
 
-提交范围包括实体和关系创建、更新、关系删除及单条 Track 收录修改。实体退役、合并身份、定义配置、上传、账号和互动各有自己的权限与事务入口；提交不提供跨服务事务或服务端长期分支。修订的 `commit_id` 在数据库中关联整笔推送，原有按实体读取历史仍有效。
+1. 创建 workspace，按需 checkout 已有实体和关系。
+2. 多次 stage 修改。跨页面编辑与协作者的修改保存在同一个服务器副本中。
+3. 检查副本差异，用固定 UUID 和修改说明创建不可变 commit。
+4. 继续编辑并 commit，或 push 当前 head。
+5. 检查 push 的 `applied`、`commits` 与 `pull_request`。直接合入才改变正式目录；PR 尚未合入时，公开条目保持原内容。
 
-## 提交审核
+来源、查证记录、质量检查均不是保存、commit、push 或合并的前置条件。已有来源资料仍保留；可在图片、收录等资料支持的字段中补充来源，不需要填写独立证据池或每操作 `source_refs`。
 
-条目没有草稿或发布状态。`state` 是只读生命周期（active / deleted / merged），`review_status=reviewed` 表示当前已生效资料。迁移时存量条目按管理员决定统一视为已审核，不改写版本与历史证据。
+## 工作副本 API
 
-提交的 `review_status` 只有 `pending_review`、`reviewed`；`review_decision` 表示 pending / approved / rejected / exempt / legacy。`202` 与 `applied=false` 是已确认接收，不能当成写入失败换 ID 重推。待审新建实体只预留 refs，通过前实体不存在。退回不会修改当前条目，原提交 ID 不能重新应用；应修改后准备新提交。
+以下路径的接口前缀为 `/api/catalog/*`。实时工作副本只对所有者和明确加入的协作者开放；`catalog.review.manage` 允许审阅冻结 PR 和已 push 的提交，不允许读取副本后续未提交内容。不能以知道 UUID 代替访问权限。已合入 commit 或 PR 的详情仅在全部涉及对象仍公开时允许公开读取，其他情况继续按权限隔离。
 
-- `GET /api/catalog/commits?review_status=pending_review&limit=25&offset=0`：本人提交；持 `catalog.review.manage` 可查看全队列。
-- `GET /api/catalog/commits/{id}/submission`：原请求、作者、冻结的 before/after 差异及审核回执，仅作者或审核人可读。
-- `POST /api/catalog/commits/{id}/review`：`{"decision":"approve","note":"已核对来源"}` 或 `reject`，需要 `catalog.review.manage`。批准时重新校验相同不可变请求及原作者权限快照，原子应用并把贡献归给原作者；审核人单独留痕。定义或事实冲突保持待审且不改条目。
+| 方法与路径 | 请求体 | 返回 |
+| --- | --- | --- |
+| `POST /workspaces` | `{name, entity_ids?, relation_ids?}` | `Workspace` |
+| `GET /workspaces` | `limit` / `offset` 查询参数 | `{items,total,limit,offset}` |
+| `GET /workspaces/:id` | 无 | `Workspace` |
+| `PATCH /workspaces/:id` | `{expected_version, name?, state?}` | `Workspace` |
+| `POST /workspaces/:id/checkout` | `{expected_version, entity_ids?, relation_ids?}` | `Workspace` |
+| `PUT /workspaces/:id/changes` | `{expected_version, operations}` | `{workspace, refs}` |
+| `PUT /workspaces/:id/members` | `{expected_version, user_ids}` | `Workspace` |
+| `POST /workspaces/:id/commits` | `{id, expected_version, message}` | `CollaborationCommit` |
+| `GET /workspaces/:id/commits` | 无 | `{items: CollaborationCommit[]}` |
+| `POST /workspaces/:id/push` | `{expected_version, expected_head, title?}` | `WorkspacePushResult` |
+| `POST /workspaces/:id/rebase` | `{id, expected_version, expected_head, message?, resolutions?}` | `{workspace, commit}` |
+| `GET /commits/:id` | 无 | `CollaborationCommit` |
 
-免审权限 `catalog.review.bypass` 与审核权限独立，由账号当前权限组决定。管理员、目录管理员及其他免审账号使用 Key 或 MCP 的已授权编辑操作同样免审，不需要为令牌单独勾选免审；Key 的操作权限仍是账号权限与 scopes 的交集，只读 Key 不允许借本人条目所有权进行写入。目录编辑组默认仍需审核。旧单对象写接口需要账号免审资格及对应操作权限，不能绕过队列。已入队的不可变提交仍须按原 ID 审核，不因后续权限变化自动应用。
+`Workspace` 包含 `id`、`owner_id`、`name`、`version`、`head_commit_id`、`state`、`members`、`objects`、`dirty_count`、`created_at` 与 `updated_at`。每个 object 有 `target`、`id`、`base_version`、`base`、`committed`、`document`、`dirty`，分别保留正式基线、最近已提交状态和当前编辑状态。提交或推送前先回读副本，不从浏览器旧缓存猜测版本。
 
-审核列表返回 `CommitSubmission[]` 数组；`review_status` 可省略或为 `pending_review` / `reviewed`，其他值返回 `invalid_review_status`。`limit` 默认 20、范围 1–100，非法值回落 20；`offset` 默认 0，非法或负值回落 0。审核请求的 `decision` 必填，只接受 `approve` / `reject`；`note` 可省略，去除首尾空白后最多 2000 个字符。
+副本 `state` 为 `active` 或 `archived`，所有者可归档或恢复。列表默认 `limit=20`、最大 100，`offset` 从 0 起。
 
-关系删除操作：`{"target":"relation","action":"delete","id":"<UUID>","base_version":2,"source_refs":[{"source":"official"}]}`。
+### 暂存修改
 
-单条收录操作：`{"target":"entity","action":"content","id":"<Track UUID>","base_version":7,"content_change":{"action":"add","position":0,"inclusion":{"expression_id":"<Expression UUID>","position":0,"locator":{}}},"source_refs":[{"source":"official"}]}`。`replace` / `delete` 的 `position` 为已有收录旧位置；删除省略 inclusion。以 Track 版本防冲突，保留其他及不可见历史收录。
+`operations` 支持实体与关系；每项字段为 `target`、`action`、`id`、`ref`、`document`、`patch`、`content_change`，按操作选择适用项。
 
-## 提交格式
+修改已有对象前先 checkout。下面只修改某一语言正文：
 
-```json
+```http
+PUT /api/catalog/workspaces/<workspace_id>/changes
+Content-Type: application/json
+
 {
-  "id": "019a0e47-6190-7000-8000-000000000001",
-  "definitions_etag": "<checkout 返回值>",
-  "edit_note": "根据官方目录补充题名与表达",
-  "sources": [
-    {"key":"catalog","kind":"url","citation":"官方目录支持题名和层级","url":"https://example.org/catalog"}
-  ],
-  "operations": [
-    {"target":"entity","action":"update","id":"<实体 UUID>","base_version":3,"reviewed_candidate_ids":[],
-     "patch":[{"path":"/translations/zh-CN/title","value":"中文题名"}],
-     "source_refs":[{"source":"catalog","pointers":["/translations/zh-CN/title"]}]},
-    {"target":"entity","action":"create","ref":"recording","reviewed_candidate_ids":[],
-     "document":{"kind":"expression","title":"录音","work_id":"<Work UUID>"},
-     "source_refs":[{"source":"catalog"}]}
-  ]
+  "expected_version": 2,
+  "operations": [{
+    "target": "entity",
+    "action": "update",
+    "id": "<entity_uuid>",
+    "patch": [{"path": "/translations/ja/body", "value": "## 解説\n本文。"}]
+  }]
 }
 ```
 
-**破坏性变更（无兼容模式）：** `sources` 是带唯一 `key` 的证据池；每个操作必须用非空 `source_refs` 声明自己引用哪些来源（可细到 JSON Pointer）。旧格式（来源无 key、操作无 `source_refs`）一律拒绝，客户端必须升级。缺/空 `source_refs` → `400 {"error":"source_refs_required","applied":false,"operation":<从 0 起>}`；来源无 key → `source_key_required`；池中有未被引用的来源 → `source_unused`。历史修订在迁移后带 `scope:"commit"`，仅表示整次提交级证据，不是字段级证明。
+patch 使用 JSON Pointer；明确删除字段时使用 `remove:true`。省略的字段保留，不把可见性裁剪后的实体整份覆盖回正式目录。正文是 `translations.<locale>.body`，与其他字段一起进入副本与提交；同一语言正文发生并发修改时，需要人工合并该字段。
 
-`target` 是 `entity` 或 `relation`。创建需要唯一 `ref` 和 `document`，不能声明服务端 ID、version、created_by、redirect_id。更新需要 ID、权威 `base_version` 和 patch；基线由服务端修订取得，不能提交伪造的旧快照。每个目标每批只能编辑一次。
+创建对象使用 `action:create`、`ref` 和 `document`。一次 stage 的文档内可用 `{"$ref":"<ref>"}` 引用本次新建对象；响应 `refs` 提供实际分配的稳定 UUID，后续 stage 和 commit 使用该 UUID，不重新创建。创建顺序应满足依赖，例如 Work → ContentUnit → Expression，Release → Medium → Track。每次 stage 包含 1–100 个操作，数组字段按整体值修改。
 
-Patch 路径使用 JSON Pointer：`~` 编码为 `~0`，`/` 编码为 `~1`。`value:null` 是显式空值，`remove:true` 是移除键，两者不可同时提供。对象字段可逐键编辑，数组整组处理；不支持数组下标，不允许同一批 patch 中出现祖先与子路径。实体可编辑字段以实例 OpenAPI 与动态 definitions 为准，ID、kind、版本及 Work/Release/Medium 归属不能通过 patch 改写。关系只可编辑 position、attributes，不能改端点和关系码。
+关系修改使用同一入口的 `target:relation`；删除关系使用 `action:delete` 和关系 ID。Track 的收录使用 `target:entity`、`action:content` 与 `content_change`：`action` 为 `add`、`replace` 或 `delete`，`position` 指已有位置，增加或替换时携带 `inclusion`。只改本次收录，保留其他和不可见的历史收录。实体、图片、关系和收录的字段约束见[新建与编辑](/api-edit)。
 
-## 编辑条目正文
-
-条目正文保存在 `translations.<locale>.body`，属于目录实体，使用同一份 checkout、权限、状态、版本和修订。局部修改正文时直接 patch 对应语言字段，保留简介和结构化资料；仅改正文不提交 `reviewed_candidate_ids`。以下操作放入提交的 `operations`，来源池包含示例中的 `official` key，ID 与 `base_version` 使用 checkout 的实际值：
+### 创建 commit
 
 ```json
 {
-  "target": "entity",
-  "action": "update",
-  "id": "<实体 UUID>",
-  "base_version": 3,
-  "patch": [{"path":"/translations/zh-CN/body","value":"## 创作背景\n有来源的说明。[^official]\n\n[^official]: https://example.org/source"}],
-  "source_refs": [{"source":"official","pointers":["/translations/zh-CN/body"]}]
+  "id": "<新的提交UUID>",
+  "expected_version": 3,
+  "message": "补充发行目录并修正参与关系"
 }
 ```
 
-脚注用于阅读，不代替提交证据。正文与其他字段的独立修改可按现有三方合并处理；同一语言的正文是一个字段，同时修改时返回字段冲突，需阅读前后内容后人工合并。删除该语言正文使用 `remove:true`，不删除该语言的题名、简介和别名。单语种正文上限与错误码见[新建与编辑](/api-edit)。
+`CollaborationCommit` 包含 `id`、`workspace_id`、`parent_id`、`author:{id,name}`、`message`、`kind`、`created_at`、`merged_at`、`merged_by`、`pull_request_id` 与 `changes`。每个 change 包含 `target`、`id`、`base_version`、`before` 和 `after`。commit 不可修改；继续编辑会产生新的 commit，作者不会被推送者或合并者替换。多人共同暂存的参与者由服务器记录，公开贡献中的 authors 保留这些贡献者，不能由客户端伪造。
 
-## 创建与身份更新的复核
+## 推送与 PR
 
-实体 create 和身份字段 update 必须提供 `reviewed_candidate_ids`，空数组表示已审查且无候选。身份 patch 包括 `/title`、`/external_links` 及其子路径，以及 `/translations` 整组、`/translations/<locale>` 整行或 `/translations/<locale>/title`。只改非身份字段的 update 和关系操作不接受该数组。
+push 指定当前副本的 `expected_version` 与 `expected_head`。具有 `catalog.review.bypass` 的账号可在其操作权限范围内直接合入；普通账号获得待合并的 PR。令牌的操作权限与账号当前免审资格分开判断，管理员通过已授权的 Key 或 MCP 编辑时同样适用。
 
-服务端用最终题名、各语言题名和外部 ID 构造 candidates 查询，按 Work（Expression/ContentUnit）、Release（Medium）或 Medium（Track）限定作用域；不加入 duration 等容易产生大量命中的弱条件。更新以三方合并后的文档复核，排除当前实体的 canonical 身份及归于它的历史别名。先用相同条件的 [candidates 查询](/api-entities#并发编目的查重候选)读取 canonical ID 并核来源。有候选时优先复用，确认为不同对象才能列入已审查数组并说明理由。
+`WorkspacePushResult` 为 `{applied, workspace, commits, pull_request}`。`workspace` 可为 null：非副本成员审核人合并或回读合入结果时，只返回冻结的 PR 和提交，不暴露实时副本。`applied=true` 表示正式目录已更新；存在 `pull_request` 表示需查看 PR 状态。PR 创建成功不表示没有合并冲突，合并时仍会重新检查。保存到副本或创建 commit 都不能报告成已上线。
 
-新作用域用本批分配的 ID；需要明确区分本批先创建的同名对象时，审查数组可用 `@local:ref名称`。创建与身份更新共同协调并发身份条件，看到候选集合与审查结果不一致时整批返回 `409 identity_candidates_changed`，不会静默再建或改出一条。响应中的 `identity_review` 含 `operation`（从 0 起）与当前 `candidate_ids`。候选截断或 canonical 未解析同样阻断写入。
+| 方法与路径 | 请求体 | 返回 |
+| --- | --- | --- |
+| `POST /api/catalog/pull-requests` | `{workspace_id, expected_version, expected_head, title?}` | `PullRequest` |
+| `GET /api/catalog/pull-requests` | `status` / `workspace_id` / `limit` / `offset` 查询参数 | `{items,total,limit,offset}` |
+| `GET /api/catalog/pull-requests/:id` | 无 | `PullRequest` |
+| `PATCH /api/catalog/pull-requests/:id` | `{expected_version, title?, status?}` | `PullRequest` |
+| `POST /api/catalog/pull-requests/:id/merge` | `{expected_version, expected_head}` | `WorkspacePushResult` |
 
-这是当前可见候选集合的复核，不是“同名即同实体”的唯一约束。公开单实体 POST / PUT 同样复核身份，`reviewed_candidate_ids` 省略时按空数组处理；无候选的旧客户端继续可用，有候选时需明确审查后提交。导入使用自己的身份策略并参加共同的身份协调。私有对象不能由查重暴露，来源判断也不能由标题匹配代替。
+commit 的 `author` 记录执行提交的账号，`authors` 记录本次修改的贡献者；合并者另存于 `merged_by`。
 
-## 合并与冲突
+PR 包含 `id`、`workspace_id`、`author_id`、`title`、`status`、`source_head_id`、只读 `source_base_id`（可为空）和 `version`、`merged_at`、`merged_by`、时间、`commits` 与 `changes`。合并校验 PR 版本和源 head，不能把审阅后新增的提交静默带入；源分支继续修改后，应回读最新差异再合并。
 
-更新按照“基线、当前值、请求值”比较每条路径。远端没有改该字段时应用本地修改；双方改成同一个值时视为已完成，不产生多余修订；双方改成不同值时返回：
+PR 状态为 `open`、`merged`、`closed`；closed 可重新打开。合并需要 `catalog.review.manage`；免审账号通过自己的或参与协作的副本 push 直接合入。列表默认 `limit=20`、最大 100，`offset` 从 0 起。
+
+定义管理、实体身份合并与退役仍是独立管理员动作；上传由存储服务处理，不属于跨服务事务。常规实体、关系与收录写入只有工作副本这一个入口。
+
+## 多人编辑与冲突
+
+同一副本的写操作带 `expected_version`，避免协作者相互覆盖。副本版本过期时先回读，保留自己尚未保存的修改，再重新组合操作。`expected_head` 还保护 push、rebase 和 PR 合并的提交边界。
+
+正式目录发生变化时，服务端从副本基线到已提交 tip 计算净变更，再与正式目录做三方合并。互不相交的字段可自动合并；自己修改后又撤销的字段不应覆盖其他人的新内容。结构依赖和引用约束在合入时重新验证，同一批修改在事务中原子应用。
+
+真实冲突返回 HTTP 409、`{error:"workspace_conflict",applied:false,conflicts:[...]}`。冲突项含 `target`、`id`、`base_version`、`current_version`、`pointer`、`base`、`current`、`proposed`、`remove`、`kind`。比较基线、当前正式值和副本值后，通过 rebase 的 `resolutions` 提交取舍：
 
 ```json
-{"error":"commit_conflict","applied":false,"conflict":{"operation":0,"id":"<UUID>","base_version":3,"current_version":4,"paths":["/title"]}}
+{
+  "id": "<新的rebase提交UUID>",
+  "expected_version": 5,
+  "expected_head": "<当前副本head>",
+  "message": "合并并发正文修改",
+  "resolutions": [{
+    "target": "entity",
+    "id": "<entity_uuid>",
+    "pointer": "/translations/ja/body",
+    "current_version": 8,
+    "value": "<人工合并后的正文>"
+  }]
+}
 ```
 
-其他字段的并发修改会保留。冲突结果只提供路径与版本，不返回隐藏事实；整个批次回滚。`definitions_conflict` 表示动态定义基线改变，需要重新核字段契约。隐藏 Track contents 必须走单条收录专用端点；Track 题名、属性、图片和状态可用稀疏 patch，服务端会保留未提交的完整事实。
-
-互不关联的结构和关系提交可并行执行。服务端使用 PostgreSQL `SERIALIZABLE` 检查跨实体依赖，不再用全目录结构锁串行化。共享发行、身份候选和同一行仍可能短暂等待；创建环、超过关系基数或修改同字段的提交仍会被拒绝。并行执行不等于所有编辑都能无冲突合并。
+选正式值或副本值时，将对应值明确写入 `value`；删除用 `remove:true`。`current_version` 防止解决冲突期间正式目录再次变化。rebase 保留原提交，并在需要时生成新 commit；完成后重新检查 head，再 push 或更新 PR。
 
 ## 断线与重试
 
-固定提交 ID 是持久幂等键。同一操作者、ID 和载荷返回首个回执；同 ID 不同内容或不同操作者返回 `409 idempotency_conflict`。不要改 ID 后重建同一批数据。查询回执的 404 可能表示请求仍在执行，不能据此断言失败；可用同 ID、同载荷再次 push，由服务端协调并发请求。
+创建 commit 使用固定 UUID。结果未知时先 `GET /api/catalog/commits/:id` 并回读副本 head；不要立即换 ID 重建相同内容。push 或合并结果未知时，回读副本、commit 的 `merged_at` 和 PR 状态后决定后续动作。
 
-已明确拒绝的提交可重新 checkout、审查冲突并 rebase，生成新提交 ID，保留旧本地提交。未知结果必须先查回执，不能 rebase。提交 ID、操作者、载荷摘要、结果与修订关联永久保留，回执不会按年龄清除；原始请求默认 90 天后裁剪，同 ID、同载荷仍可恢复首个结果。
+同一 head 已合入时再次 push 返回已应用结果，不重复写正式目录；同一 head 已有 open PR 时返回原 PR。创建 workspace 没有客户端幂等键，结果未知应先列出本人副本确认，不能盲目重复创建。
 
-checkout、预览、推送及回执读取与其他目录请求共用默认 180 次/分钟预算，读写合计，实例策略可覆盖；多副本共享计数，见[限流](/api-overview#限流)。服务端提交期限 15 秒、锁等待 3 秒，失败后按机器码与回执判断结果。批量减少请求数，不保证任意大小的关系图都能在期限内提交。
+副本、commit、PR 和正式修订各自保留自己的状态。未知结果不能当成未执行，409 不能通过盲目换版本或整实体覆盖解决。实际错误码与载荷以目标实例 OpenAPI 和响应为准；限流与依赖错误见[API 概览](/api-overview)。
 
-数据库明确回滚的序列化失败、死锁或锁等待超时由服务端重新执行整个事务，最多 16 次尝试，仍受 15 秒期限限制；提交 ID 和请求不变。耗尽尝试返回 `503 {"error":"transaction_busy","applied":false}` 与 `Retry-After: 1`。这仅证明本次请求未应用；若此前同 ID 请求断线且结果未明，仍须查回执，不能凭后一次失败创建新提交。客户端保留提交，稍后显式推送同 ID、同载荷；连接断开和其他 5xx 不自动重放写请求。
+## 贡献归属
 
-## 机器错误码
-
-下表补充提交与 checkout 的错误；实体字段、来源、权限与可见性仍沿用[新建与编辑](/api-edit)和[API 概览](/api-overview)。400 表示载荷需修正，不能原样自动重试。
-
-| HTTP / error | 处理 |
-| --- | --- |
-| 400 `invalid_checkout_size` / `duplicate_checkout_id` / `invalid_id` | 合计最多 100 个规范 UUID，同一 ID 只出现一次 |
-| 400 `invalid_commit_id` / `definitions_etag_required` / `invalid_commit_size` | 使用固定规范 UUID、checkout 的定义基线和 1–100 个操作 |
-| 400 `invalid_commit_target` / `invalid_commit_action` | target 为 entity/relation，action 为 create/update |
-| 400 `invalid_create_operation` / `invalid_update_operation` / `duplicate_commit_target` | 核对 ref、ID、base_version、document/patch；同批一个目标只能编辑一次 |
-| 400 `identity_review_required` / `invalid_identity_review` | 创建或身份更新须带审查数组；其余操作不能带，审查项需为合规候选身份 |
-| 400 `identity_candidates_incomplete` / `identity_candidate_unresolved` | 收窄候选条件或修复身份解析，不能把不完整集合当作没有重复 |
-| 400 `invalid_document` / `server_fields_forbidden` | 使用严格 document DTO，不声明服务端 ID、version、created_by 或 redirect_id |
-| 400 `invalid_local_reference` | 使用 `{"$ref":"此前创建的 ref"}`，检查依赖顺序与目标是否存在 |
-| 400 `invalid_patch_path` / `invalid_commit_patch` / `overlapping_patch_paths` / `patch_requires_object` | 修正 JSON Pointer、value/remove 与对象层级；不编辑数组下标或重叠路径 |
-| 400 `base_revision_missing` | 服务端找不到指定的权威基线；重新 checkout 并重新形成修改 |
-| 400 `use_track_contents_endpoint` | 隐藏收录不能整体 patch，改用单条收录端点；其余稀疏修改可保留完整历史事实 |
-| 400 `commit_incomplete` | 无法恢复已存提交的完整结果；保留原 ID 与载荷，报告服务异常 |
-| 400 `source_refs_required` | 某个操作缺或空 `source_refs`；响应含 `applied:false` 与 `operation` 索引。旧格式无兼容，必须补齐 |
-| 400 `source_key_required` / `invalid_source_key` / `duplicate_source_key` | 来源池缺 key、key 不合规或重复 |
-| 400 `source_unused` / `unknown_source_ref` / `duplicate_source_ref` | 池中有未引用的来源，或操作引用了不存在/重复的 key |
-| 400 `invalid_source_pointer` / `source_pointer_not_in_document` / `source_pointer_not_patched` | 指针非法，或不在 create document / update patch 覆盖范围内 |
-| 409 `commit_conflict` | 按 conflict.paths 比较双方改动，重新取舍后 rebase |
-| 409 `definitions_conflict` | 重新读取定义和工作副本，核对字段契约 |
-| 409 `identity_candidates_changed` | 按 identity_review 的当前 canonical 候选重新审查；整批未应用 |
-| 409 `idempotency_conflict` | 同 ID 已属于另一操作者或另一载荷，勿改 ID 盲目重建 |
-| 503 `transaction_busy` | 本次明确未应用；按 Retry-After 重试同 ID，此前未知请求仍先查回执 |
-
-回执的 `applied` 表示服务端结果，不等于客户端工作副本已刷新。推送成功后应核对回执并更新基线；封存后的追加编辑须与回读内容合并，不能直接覆盖或丢弃。
+正式合入保留原 commit 作者，合并者另记。一个批量 commit 对每位真实参与者只计一次，不按修改对象数重复计数；个人主页的贡献日历按真正合入的时间统计。未合入的私有副本、提交消息和修改目标不进入公开贡献流，见[用户贡献流](/api-entities#用户贡献流)。

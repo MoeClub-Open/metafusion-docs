@@ -58,7 +58,7 @@ Content-Type: application/json
 - 超过 `STORAGE_MAX_PARTS`（默认 10000）返回 `400 too_many_parts`
 - `target_entity_id`（可选）：同时绑定到该实体，必须对调用者可见；`target_entity_type` 若填写，必须与目录给出的 kind 一致
 - `binding_role`（可选，默认 `master_archive`）：绑定用途，取值匹配 `^[a-z][a-z0-9_]{0,31}$`，例如 `track_audio`、`disc_image`、`video`、`scans`
-- `binding_role` 不设封闭枚举，新增用途不需要改代码
+- `binding_role` 不设封闭枚举，新增用途不需要改代码；`cover_image` 由目录管理，不能在初始化时同时传 `target_entity_id`，否则返回 `409 catalog_managed_binding`
 
 响应：
 
@@ -158,6 +158,8 @@ DELETE /api/storage/bindings/{binding_id}
 
 同一 `(asset, entity, role)` 只保留一条，重复绑定返回既有的真实绑定 ID，保留创建者与创建时间，并确认继续使用。解绑用于纠错，绑定创建者、文件上传者或审核者（持 `storage.asset.moderate`）都可以操作。
 
+`cover_image` 是目录管理的保留用途：公开 `POST /bind` 或 `DELETE /bindings/{binding_id}` 操作该用途均返回 `409 catalog_managed_binding`。需要更换或移除封面时，编辑目录图片并合入；音频、原档等其他用途仍使用上述接口。
+
 ### 目录变更与资产保留
 
 已配置目录与存储生命周期同步的实例，会异步按当前 canonical 身份、完整历史别名、各身份版本及图片资产集合对齐绑定。同步失败会重试，目录保存不等待存储处理；未启用同步的实例不能假定目录变更会自动处置绑定。
@@ -166,11 +168,10 @@ DELETE /api/storage/bindings/{binding_id}
 | --- | --- |
 | 合并身份 | 全部文件用途迁到 canonical 身份并去重；优先保留既有 canonical 绑定，否则保留一个来源绑定的 ID 与创建信息，历史别名图片资产继续保留 |
 | 删除 canonical 实体 | 撤除该身份和完整历史别名的所有用途绑定 |
-| 修改图片 | 只撤除已移出当前身份及历史别名图片资产集合的 `cover_image` 绑定，不影响音频、原档等其他用途；不会自动创建缺少资产所有者授权的新绑定 |
-| 下架回草稿 | 保留文件绑定 |
+| 合入图片修改 | 根据已验证的副本资产引用自动创建正式 `cover_image` 绑定，保留原保存者；撤除已移出当前身份及历史别名图片集合的封面绑定，不影响音频、原档等其他用途 |
 | 修改 TrackContent 收录 | 保留 Track 与 Expression 文件；收录引用不等于资产绑定 |
 
-上传或重复绑定到图片保存之间的新确认会受到保护，旧目录快照不会立即撤除它；图片上传成功后仍须完成目录保存。存量绑定保守保留到该身份下一次目录新写入再复核。
+工作副本保存图片时自动建立私有资产预留，不改变正式绑定，也不授予公开读取权限。仍被副本、基线或不可变提交引用的资产受到保留保护；回收前会向目录核对真实引用，核对失败时保留。正式封面绑定由合入后的目录生命周期同步创建和撤除，不由客户端补写。
 
 已完成资产在失去最后一个绑定后默认保留 7 天，重新绑定取消计时；从未绑定的 complete 从完成时起算，升级前已有的无绑定资产从迁移时起算。保留期由实例配置，实际到期回收需运维定期运行存储 worker；禁发或仍有任何绑定的资产不回收。多个资产共享同一对象时，只撤除到期资产记录，保留仍被引用的字节。
 
@@ -179,6 +180,7 @@ DELETE /api/storage/bindings/{binding_id}
 | HTTP / error | 处理 |
 | --- | --- |
 | 409 `binding_target_changed` | 身份在读取与绑定写入之间发生合并或删除，重新读取 canonical 身份后再绑定 |
+| 409 `catalog_managed_binding` | 封面绑定由目录管理，改用工作副本修改图片并合入 |
 | 409 `asset_reclaiming` | 资产已进入字节删除阶段，不能重新绑定、续传、完成或禁发来恢复；核对资产状态后重新初始化上传 |
 
 ## 自托管封面
@@ -186,12 +188,25 @@ DELETE /api/storage/bindings/{binding_id}
 先核实图像与目标实体的关系及使用依据，再上传实际图像字节。HTTP 200 与 `image/*` 只能说明传输响应，不能证明图像身份或使用权。
 
 1. 在客户端读取文件，计算 SHA-256 与真实字节数。
-2. 调用 `POST /api/storage/upload/initiate`，提供 `file_name`、`file_size`、`sha256_hash`、`mime_type`，并以 `target_entity_id` 和 `binding_role: "cover_image"` 绑定目标实体。封面用途与目录图片的 `role` 是两个字段。
+2. 调用 `POST /api/storage/upload/initiate`，提供 `file_name`、`file_size`、`sha256_hash`、`mime_type`，不传 `target_entity_id`。可用 `binding_role: "cover_image"` 说明用途，它不创建绑定；存储用途与目录图片的 `role` 是两个字段。
 3. 若 `is_instant_upload=true`，复用返回的已验证资产；否则把原始字节 PUT 到响应中的 `presigned_urls` 或 `direct_upload_url`，分片方式保留各片 ETag。
-4. 非秒传时调用 `POST /api/storage/upload/complete` 完成并验证摘要；成功后才把资产当作可用图像。未在 initiate 指定绑定时，再调用 `POST /api/storage/bind`，仍用 `binding_role: "cover_image"`。
-5. 在实体 `pictures` 中写入资产 UUID 为 `asset_id`，以实例根地址构造 `/api/storage/assets/{asset_id}/content` 的绝对 URL，并记录真正的来源页面。要作为封面则放在数组首位，DTO 和校验见[图片与自托管封面](/api-edit#图片与自托管封面)。
+4. 非秒传时调用 `POST /api/storage/upload/complete` 完成并验证摘要；成功后才把资产当作可用图像。保存到副本不创建正式实体绑定。
+5. 在工作副本的实体 `pictures` 中写入 `asset_id`，`url` 保存实例的 `/api/storage/assets/{asset_id}/content` 绝对地址。stage 会自动预留私有引用，不需要客户端另调预留接口。新增资产须已完成、摘要已验证、未禁发且未进入回收；保存者须为上传者或当前持 `storage.asset.moderate` 的成员。要作为封面则放在数组首位，DTO 见[图片与自托管封面](/api-edit#图片与自托管封面)。
+6. commit 后 push 或发起 PR。合入后的目录生命周期同步自动创建正式封面绑定，保留原保存者；客户端不调用 `POST /storage/bind` 创建封面。未合入的修改不改变公开封面。
 
-目录写入和存储上传分别提交，没有跨服务事务。上传成功而目录保存失败时，保留 `asset_id`，按目录错误处理后重用资产；需要撤除误建绑定时使用解绑端点。公开读取仍要求资产 complete、未禁发且至少一个绑定目标可见。
+目录合入与存储上传、生命周期同步没有跨服务事务。上传成功而 stage 失败时，保留 `asset_id`，修正目录错误后重用资产；同步失败由服务端重试，不能用公开封面绑定接口补写。公开读取仍要求资产 complete、未禁发且至少一个正式绑定目标可见。
+
+### 副本与 PR 的私有图片预览
+
+| 上下文 | 预览地址 |
+| --- | --- |
+| 工作副本 | `GET /api/catalog/workspaces/:id/assets/:assetID/content` |
+| PR | `GET /api/catalog/pull-requests/:id/assets/:assetID/content` |
+| 不可变提交 | `GET /api/catalog/commits/:id/assets/:assetID/content` |
+
+副本预览只允许所有者或协作者，并检查图片确实在该副本引用中。PR 预览按冻结提交读取，commit 预览只读取该提交的图片引用；审核者不能借 PR 查看副本尚未提交的编辑。无权或未引用均返回 404。成功返回图片原始字节，使用 `Cache-Control: private, no-store`。
+
+这些地址只供展示时选择图片源，不能保存进 `pictures[].url`；图片字段始终保留权威存储地址。尚未 stage 的上传由上传者使用原存储地址预览，stage、commit 和 PR 页面按对应上下文选择私有预览地址。
 
 ## 查询与下载
 

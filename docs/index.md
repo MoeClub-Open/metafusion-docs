@@ -27,7 +27,7 @@ features:
     details: 为词条补充事实、参考来源和多语言名称，保留每次修改的记录。
     link: /editing-guide
   - title: 程序接入
-    details: 用统一 API 查询实体及其关系，按权限提交有来源的修改。
+    details: 用统一 API 查询实体及其关系，在工作副本中协作编辑并按权限合入。
     link: /api-overview
 ---
 

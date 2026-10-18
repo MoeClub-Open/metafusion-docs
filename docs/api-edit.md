@@ -1,61 +1,38 @@
 ---
 title: "新建与编辑"
-description: "实体写入 DTO、乐观锁、关系、生命周期与外部来源只读查询。"
+description: "实体与关系字段、工作副本编辑、生命周期与外部来源只读查询。"
 order: 50
 group: "api"
 ---
 
 # 新建与编辑
 
-批量编目与 Agent 编辑优先使用[工作副本与提交](/api-commits)，获得原子批次、字段合并和持久回执。本页维护交互式单对象操作、生命周期与外部来源只读查询的 DTO。
+交互编辑器与 Agent 统一通过[工作副本与提交](/api-commits)编辑目录。先将修改保存到服务器副本，可连续编辑和 commit；push 时由免审账号直接合入，其他账号发起 PR。正式目录只在合入后改变。
 
-交互编辑器与 Agent 均通过目录提交写入。没有草稿或发布状态；条目 `state` 只表示 active / deleted / merged 生命周期，已生效资料为 `review_status=reviewed`。普通提交进入审核队列，免审提交立即生效；审核期间保持旧条目内容与版本。下表中的旧单对象写接口仅供持有 `catalog.review.bypass` 的受信任维护工具使用，其他调用返回 `400 commit_required`。
+本页说明副本中实体与关系的文档形状，以及独立的生命周期、外部来源查询和配置入口。没有草稿或发布状态；条目 `state` 只表示 active / deleted / merged 生命周期，已生效资料为 `review_status=reviewed`。
 
-| 用途 | 端点 |
-|---|---|
-| 实体 | `/api/catalog/entities` |
-| 关系 | `/api/catalog/relations` |
-| 单条 Track 收录 | `/api/catalog/tracks/:id/contents` 与 `/:position` |
-| 合并 / 退役 | `/api/catalog/entities/:id/lifecycle` |
+## 认证与权限
 
-## 前提：认证与权限码
+编辑需要登录。副本访问权限与操作权限同时生效：能加入副本不代表能提交任何类型的修改。
 
-写入一律需要登录（`401 authentication_required`），并按权限码放行（`403 forbidden`）。
-
-| 权限码 | 能做什么 |
-|---|---|
-| `catalog.entity.edit` | 创建与编辑实体（含维护公开条目） |
-| `catalog.relation.edit` | 创建 / 替换 / 删除关系 |
-| `catalog.review.manage` | 审核整笔目录提交，不自动获得免审权限 |
-| `catalog.review.bypass` | 账号的提交立即生效，Key / MCP 按账号当前免审资格判定，无需委托该码；操作本身仍须满足令牌编辑范围 |
+| 权限码 | 用途 |
+| --- | --- |
+| `catalog.entity.edit` | 创建与编辑实体 |
+| `catalog.relation.edit` | 创建、修改与删除关系 |
+| `catalog.review.manage` | 审阅并合并 PR，不自动取得直接 push 资格 |
+| `catalog.review.bypass` | 账号 push 时可直接合入；Key / MCP 按账号当前免审资格判定，操作本身仍须满足令牌编辑范围 |
 | `catalog.lifecycle.manage` | 合并与退役条目 |
-| `catalog.definitions.manage` | 检查并保存动态定义与目录配置 |
+| `catalog.definitions.manage` | 保存动态定义与目录配置 |
 | `catalog.shelves.manage` | 维护货架规则 |
 | `storage.asset.upload` | 上传与登记自己的资产 |
 
-`storage.asset.upload` 覆盖 `/api/storage/upload/*` 与 `POST /api/storage/bind`，`member` 组默认持有该码。
+没有协作编辑权限的登录用户可在自己的权限范围内新建或维护自己创建的资料；能编辑不代表免审。账号权限与令牌 scopes 的关系见[认证与凭证](/api-auth)。
 
-权限码由账号服务装进权限组、随访问令牌的 `permissions` 声明下发（admin 组带 `*` 通配）。
-权限判定只看 `permissions`；缺失或空权限集合不会按角色补授。
+## 修改说明与来源
 
-::: warning 注意
-没有协作编辑权限的登录用户可新建提交及维护自己创建的条目；修改他人资料需要 `catalog.entity.edit`。能编辑不代表免审。
-:::
+commit 使用 `message` 说明本次修改。来源、查证记录和质量报告不要求填写，也不阻止保存或合入。文档支持的历史来源仍保留；提供来源时填写真实内容，不自动补造 self 或其他占位来源。
 
-## 写入前必带的证据
-
-每次写入都必须带 `edit_note`（非空）与至少一条 `sources`，否则 `400 evidence_required`：
-
-```json
-"sources": [{ "kind": "url", "citation": "官方商品页", "url": "https://example.com/item" }]
-```
-
-- 新证据的 `kind` 只接受 `url` / `publication`；`self` 返回 `400 source_not_eligible`
-- `citation` 不能为空
-- `kind=url` 必须提供有效 URL；`publication` 可用出版物与页码而不带 URL，所带链接仍须有效（`400 invalid_source`）
-- 指向目标实例自身及其子域的证据 URL 返回 `400 source_not_eligible`。本站页面不能作为本站事实的独立证据；图片字节的站内存储地址仍可写在 `pictures[].url`。
-
-新增或改动图片、收录的来源也按此要求检查；未改变的历史来源可保留，历史修订不会随新规则清洗。来源资格不按“社区网站”一律排除，是否足以支持具体字段仍须逐项判断。
+图片 URL 表示图片地址，可选 `source` 表示出处；收录可选 `sources` 表示该条事实的出处。来源中的 URL、类型等仍须符合字段格式。外部来源读取不会自动形成目录修改。
 
 ## 实体引用格式
 
@@ -63,41 +40,30 @@ group: "api"
 
 旧库存中的动态属性引用由 `000023_reference_canonicalization` 一次性迁移规范化；客户端不能依赖写入时自动转换旧格式。`external_links` 是外部链接数组，其中的 `external_id` 按各库编号规则校验，不套用目录实体引用规则。
 
-## 创建实体
+## 实体文档
 
-```http
-POST /api/catalog/entities
+新建实体时，把以下文档放入 workspace stage 操作的 `document`，使用 `target:entity`、`action:create` 和本次操作内唯一的 `ref`；稳定 UUID 由服务器分配后返回。正式条目的 ID、版本、创建者和生命周期由服务端管理。
+
+```json
 {
-  "entity": {
-    "kind": "work",
-    "title": "攻壳机动队",
-    "original_language": "ja",
-    "translations": { "zh-CN": { "title": "攻壳机动队", "summary": "作品简介", "body": "## 创作背景\n根据外部资料整理的条目说明。[^official]\n\n[^official]: https://example.com/source" } },
-    "attributes": { "tags": ["动画", "电影"] },
-    "external_links": [{ "kind": "bangumi", "url": "https://bangumi.tv/subject/265", "external_id": "265" }],
-    "pictures": [{ "url": "https://example.com/cover.jpg", "source": { "kind": "url", "citation": "官方海报", "url": "https://example.com" } }]
+  "kind": "work",
+  "title": "攻殻機動隊",
+  "original_language": "ja",
+  "translations": {
+    "ja": {"title": "攻殻機動隊", "summary": "作品简介", "body": "## 解説\n条目正文。"}
   },
-  "expected_version": 0,
-  "edit_note": "initial import per official catalog",
-  "sources": [{ "kind": "url", "citation": "官方站点", "url": "https://example.com" }]
+  "attributes": {},
+  "external_links": [],
+  "pictures": []
 }
 ```
 
-- `kind`：`agent` / `collection` / `work` / `content_unit` / `expression` / `release` / `medium` / `track`
-- 创建时 `entity.id` 留空（否则 `400 id_must_be_empty`），`expected_version` 为 0；更新使用详情返回的身份与版本。
-- `translations` 是按 locale 分组的对象，不是数组；每个语种含 `title` / `summary` / `body` / `aliases`。`summary` 是简短纯文本简介；可选 `body` 是共同维护的 Markdown 条目正文，省略或空串表示没有正文。每语种最多 100000 个 Unicode 字符，超长返回 `400 article_too_long`，含 NUL 返回 `400 invalid_article_body`。正文沿用实体权限、状态、来源与修订，脚注不替代顶层 `sources`。
-- 整实体 PUT 会替换全部语言资料，包括正文。先读完整详情并保留其它语言与正文；需要局部编辑时，使用[提交 API](/api-commits#编辑条目正文)按字段 patch。
-- 原语言题名放在对应语种行里
-- `attributes` 的键必须在已发布定义中声明，未声明的键返回 `400 unknown_field: <code>`
-- 业务形态用标签（`attributes.tags`）或 GUI 配置的字段/词表表达，字段适用范围由 `applicable_kinds` 声明
-- `cover_aspect` 不是可写字段：它未在已发布定义中声明，自造这个键会被 `unknown_field` 拒绝
-- 比例只是展示建议（音乐 1:1、影视 2:3、书籍 3:4），展示层按封面图自然比例推断
-- `external_links[].kind` 必须是已登记的外部权威库（见 `GET /api/catalog/external-databases`）；`url` 必填；`role` 可空（`official|primary|secondary|operator`）
-- 请求体里出现未知字段一律 `400 invalid_payload`（服务端按严格模式解码）
-- 创建实体与关系可带 `Idempotency-Key`，键按操作、用户和请求键区分。
-- 同键同载荷重放首创响应；同键不同载荷返回 `409 idempotency_conflict`。
-- 幂等记录与业务写入在同一数据库事务提交，可跨进程重启和副本复用。新的逻辑操作使用新的键；不确定是否成功时重试原载荷和原键。
-- 单实体 POST / PUT 可在顶层提供 `reviewed_candidate_ids`。省略按空数组复核；创建或改变身份时，当前可见候选与审查集合不一致返回 `409 identity_candidates_changed`，响应含 `identity_review: {operation: 0, candidate_ids: [...]}`。先核对 canonical 候选再明确提交，身份字段与共同并发协调见[工作副本与提交](/api-commits#创建与身份更新的复核)。
+- `kind` 是 agent / collection / work / content_unit / expression / release / medium / track。
+- `translations` 按 locale 分组，每个语种含 `title`、`summary`、`body`、`aliases`。原语言题名放在对应语种行。
+- `summary` 是简短纯文本简介；可选 `body` 为 Markdown 正文，省略或空串表示没有正文。每语种最多 100000 个 Unicode 字符，超长返回 `article_too_long`，含 NUL 返回 `invalid_article_body`。
+- `attributes` 的键必须在当前 definitions 中声明，适用种类由 `applicable_kinds` 决定。不能自行添加 `cover_aspect` 等未定义键。
+- `external_links[].kind` 须为已登记的外部权威库；`url` 必填，`role` 可省略。
+- 更新已有文档使用 stage 的稀疏 `patch`，只声明实际变更，保留其他语言、正文与未编辑事实。
 
 ### 图片与自托管封面
 
@@ -121,14 +87,16 @@ POST /api/catalog/entities
 | 字段 | 契约 |
 | --- | --- |
 | `url` | 必填的有效图片 URL；同一实体不能重复使用同一 URL |
-| `source` | 必填的图片来源，遵循上文证据规则；存储地址与来源页面分别记录 |
+| `source` | 可选图片出处；存储地址与来源页面分别记录，不因缺来源而阻止提交 |
 | `caption` / `version_label` | 按语言码保存说明 / 图像版本名称；后者不是实体 version |
 | `role` | 可省略；有值时必须为 `picture_role` 词表项码 |
 | `taken_at` | 可省略；允许年、年月、完整日期或 RFC3339 时间，仅作图像时间信息 |
 | `usage_period` | 可省略；填写时 begin/end 至少有一端，支持部分日期，包含两端，结束不能早于开始；可与其他图片使用期重叠 |
-| `asset_id` | 自托管资产的 UUID；外链图可省略。目录服务只检查格式，写入方须先完成存储上传和 `cover_image` 绑定 |
+| `asset_id` | 自托管资产的 UUID；外链图可省略。先完成上传，stage 自动验证资产状态与保存者资格并预留私有引用；正式封面绑定由合入后的生命周期同步管理 |
 
 图片校验错误为 `400 too_many_pictures`、`duplicate_picture`、`invalid_picture`、`invalid_picture_time`、`invalid_picture_period`、`invalid_picture_asset`；用途词表不存在或词项非法分别返回 `unknown_vocabulary`、`invalid_term`。自托管上传的完整步骤见[存储上传与下载](/api-storage#自托管封面)。
+
+自托管图片的 `url` 始终保存 `/api/storage/assets/{asset_id}/content` 的绝对地址。上传不绑定正式实体；新增资产由上传者或当前存储管理员保存到副本，资产须已完成且摘要已验证、未禁发、未回收。副本、PR 和 commit 可用各自上下文的[私有预览地址](/api-storage#副本与-pr-的私有图片预览)展示，不能把预览代理地址写回图片字段。公开绑定或解绑 `cover_image` 返回 `409 catalog_managed_binding`；更换封面统一修改图片并合入。
 
 ### 外部标识
 
@@ -153,69 +121,36 @@ POST /api/catalog/entities
 写错了只能新建或走生命周期处置。
 :::
 
-## 编辑实体
+## 编辑实体与收录
 
-```http
-PUT /api/catalog/entities/:id
-{
-  "entity": { "...": "完整实体，保留所有无关字段" },
-  "expected_version": 3,
-  "edit_note": "fix typo per official site",
-  "sources": [{ "kind": "url", "citation": "官网标题", "url": "https://example.com" }]
-}
-```
+编辑已有实体前将其 checkout 到 workspace。修改使用 `PUT /api/catalog/workspaces/:id/changes`，提供当前副本 `expected_version` 和 `operations`。对象字段通过 JSON Pointer patch 修改，删除字段明确使用 `remove:true`。
 
-::: warning 注意
-PUT 是整实体替换，不是局部 PATCH：先 `GET /api/catalog/entities/:id` 取回完整实体与 `version`，
-改完再整体写回。翻译、标签、`contents` 都可能整组替换。
-:::
-
-Track 整体写入时，每条 `contents[].sources` 未提供或为 `null` 都会继承本次编辑的顶层 `sources`，即使该收录的其他字段未改变。要保留既有逐条证据，须将回读的 `contents[].sources` 数组显式带回；服务端不会按旧条目自动补回。
-
-详情可能过滤调用者不可见的收录。没有 `catalog.lifecycle.manage` 时，整体 PUT 若遗漏或改变隐藏收录会返回 `403 forbidden`，防止把裁剪后的读取结果当作完整事实覆盖。修改可见收录使用提交的 `content` 操作；旧单条收录端点仅限免审工具，题名或属性等字段可用[提交协议](/api-commits)的稀疏 patch。
-
-- `expected_version` 与当前版本不一致返回 `409 version_conflict`：重读后再写，不要盲目重试
-- `deleted` / `merged` 走生命周期端点；PUT 提交这两个状态返回 `400 use_lifecycle_endpoint`
-
-### 单条收录
-
-目标实例支持这些接口时，Track 内容页可逐条编辑收录。版本边界是拥有者 Track，其他收录保持；不可见历史收录保留，响应仍按可见性裁剪。
-
-```http
-POST   /api/catalog/tracks/:id/contents           # 增加
-PUT    /api/catalog/tracks/:id/contents/:position # 替换或重排，URL 为旧位置
-DELETE /api/catalog/tracks/:id/contents/:position # 删除，仍须请求体
-```
-
-增加或替换的请求体：
+Track 详情可能过滤不可见收录，不能把裁剪后的结果整份替换回去。修改单条收录使用 `target:entity`、`action:content`、Track ID 和 `content_change`：
 
 ```json
 {
-  "inclusion": {"expression_id": "<表达 UUID>", "position": 0, "locator": {}, "attributes": {}},
-  "expected_version": 3,
-  "edit_note": "依据官方曲目表补充收录",
-  "sources": [{"kind": "url", "citation": "官方曲目表确认本轨所收录录音", "url": "https://example.com/tracklist"}]
+  "target": "entity",
+  "action": "content",
+  "id": "<track_uuid>",
+  "content_change": {
+    "action": "add",
+    "position": 0,
+    "inclusion": {"expression_id": "<expression_uuid>", "position": 0, "locator": {}, "attributes": {}}
+  }
 }
 ```
 
-`inclusion.sources` 可独立填写；省略或为 `null` 时，增加或替换的收录使用本次编辑的顶层 `sources`。替换的 `inclusion.position` 可以不同于 URL 中旧位置。删除只带 `expected_version` / `edit_note` / `sources`。每次成功产生 Track 修订；409 后回读再合并，不盲重放。未被本次单条操作替换的收录保留已保存证据；整实体 PUT 则遵循上节的逐条证据规则。
+replace / delete 的 `position` 指原位置；删除省略 `inclusion`。收录来源可省略，已有其他收录与历史来源保留。副本保存、commit 和 push 的完整流程见[工作副本与提交](/api-commits)。
 
 ## 关系
 
-```http
-POST   /api/catalog/relations          # 建边（支持 Idempotency-Key）
-PUT    /api/catalog/relations/:id      # 替换边的属性（端点与类型不可改）
-DELETE /api/catalog/relations/:id      # 删边（body 带 expected_version 与证据）
-```
+关系在同一 workspace 中编辑。`target:relation`、`action:create` 时的 `document` 例如：
 
 ```json
-{
-  "relation": { "type": "directed_by", "source_id": "<work_id>", "target_id": "<agent_id>", "position": 0, "attributes": {} },
-  "expected_version": 0,
-  "edit_note": "自官方制作名单",
-  "sources": [{ "kind": "url", "citation": "官方制作名单", "url": "https://example.com" }]
-}
+{"type": "directed_by", "source_id": "<work_uuid>", "target_id": "<agent_uuid>", "position": 0, "attributes": {}}
 ```
+
+更新关系使用 ID 与 patch；端点和类型不能原地修改。删除使用 `action:delete` 和 ID。关系码以当前 definitions 为准，示例不保证目标实例启用了该码。
 
 服务端逐项校验，失败码可直接定位问题：
 
@@ -245,7 +180,7 @@ POST /api/catalog/entities/:id/lifecycle
 - 合并后源实体状态置 `merged` 并写入 `redirect_id`，指向它的关系与结构引用会被改写
 - 旧 id 用 `GET /api/catalog/entities/:id/resolve` 跟随到保留实体
 - 不带 `target_id` 为退役：状态置 `deleted`
-- 证据要求与实体写入一致：`edit_note` 非空 + 至少一条 `sources`，空数组会被 `400 evidence_required` 拒绝
+- `edit_note` 与 `sources` 为可选补充，不因缺来源而拒绝；版本和生命周期权限仍须满足
 - 已 `deleted` / `merged` 的实体再调会返回 `400 invalid_state`
 - 两个动作都需要 `catalog.lifecycle.manage`
 
@@ -254,7 +189,7 @@ POST /api/catalog/entities/:id/lifecycle
 合并与退役由 `target_id` 有无决定，带 `{"action":"publish"}` 会 `400 invalid_payload`。
 :::
 
-生命周期为 `active` / `deleted` / `merged`。审核状态独立属于提交，取值只有 `pending_review` / `reviewed`；结果通过 `review_decision` 区分 pending / approved / rejected / exempt / legacy。
+生命周期为 active / deleted / merged。普通编辑的待合并状态属于 PR，不能用实体状态表达。
 
 ## 修订历史
 
@@ -262,13 +197,13 @@ POST /api/catalog/entities/:id/lifecycle
 GET /api/catalog/entities/:id/revisions
 ```
 
-每次写入都会生成修订行（含操作者、`edit_note`、`sources` 与快照），写入与修订行在同一事务里落库。
+每次正式合入都会生成修订行，保留作者、提交关联和快照；已有修改说明与来源仍可查看。副本中的 stage 或未合入 commit 不产生公开实体修订。
 
-实体修订按实体可见性过滤。该端点也接受关系 ID（关系修订行的 `target_id` 就是关系 ID），此时可见性由关系两端实体共同判定。
+实体修订按实体可见性过滤。该端点也接受关系 ID，此时可见性由关系两端实体共同判定。
 
 ## 外部来源只读查询
 
-外部来源适配器提供只读查询：返回上游原文、`FetchMeta`（`url` / `fetched_at` / `content_hash`），以及 preview 映射（lookup/detail）。落库请走常规实体写入或[工作副本与提交](/api-commits)。
+外部来源适配器提供只读查询：返回上游原文、`FetchMeta`（`url` / `fetched_at` / `content_hash`），以及 preview 映射（lookup/detail）。录入使用[工作副本与提交](/api-commits)。
 
 当前已实现 Bangumi、DLsite、DMM 适配器，可选来源以 `GET /api/external-sources` 为准。以下端点需要登录：
 
@@ -379,34 +314,18 @@ PUT 发送 `{ "settings": <完整设置>, "expected_updated_at": "<GET 返回的
 
 ## 编辑示例
 
-下面的 Python 示例先读取完整实体，只修改题名，再提交当前 version。凭据使用环境变量，示例来源与目标须按实际任务替换。
+一项题名纠正可按下列顺序执行：
 
-```python
-import os
-import requests
+1. `POST /api/catalog/workspaces`，传入 `name` 和待编辑的 `entity_ids`。
+2. `PUT /api/catalog/workspaces/:id/changes`，用返回的副本版本和稀疏 patch 暂存题名。
+3. `POST /api/catalog/workspaces/:id/commits`，传固定提交 UUID、最新副本版本和修改说明。
+4. 回读副本，`POST /api/catalog/workspaces/:id/push`，传最新版本与 head。
+5. 检查 `applied` 和 PR；冲突时比较 base/current/proposed，再 rebase。
 
-base = os.environ["METAFUSION_BASE_URL"].rstrip("/") + "/api"
-headers = {"Authorization": "Bearer " + os.environ["METAFUSION_TOKEN"]}
-entity_id = "<entity_uuid>"
-current = requests.get(f"{base}/catalog/entities/{entity_id}", headers=headers, timeout=15)
-current.raise_for_status()
-entity = current.json()
-version = entity["version"]
-entity["title"] = "<经来源核实的题名>"
-payload = {
-    "entity": entity,
-    "expected_version": version,
-    "edit_note": "依据来源修正基础题名",
-    "sources": [{"kind": "publication", "citation": "<具体出版物与页码>"}],
-}
-result = requests.put(f"{base}/catalog/entities/{entity_id}", headers=headers, json=payload, timeout=15)
-result.raise_for_status()
-```
-
-409 时停止并回读，合并新的修改后再提交；不要把旧完整实体直接覆盖回去。
+完整载荷、断线恢复和协作者规则见[工作副本与提交](/api-commits)。常规编辑没有直写正式实体、关系或收录的第二套接口。
 
 ## 相关页面
 
 - [API 概览](/api-overview)：错误码与限流
-- [实体查询与详情](/api-entities)：写之前先把实体读全
-- [AI Agent API 与工具规范](/api-agent)：把写入契约包成工具定义
+- [实体查询与详情](/api-entities)：读取实体与关系
+- [AI Agent API 与工具规范](/api-agent)：Agent 接入与任务恢复

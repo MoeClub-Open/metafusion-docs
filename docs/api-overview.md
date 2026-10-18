@@ -7,14 +7,14 @@ group: "api"
 
 # API 概览
 
-MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，所有实体共用查询、详情和写入端点。
+MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，所有实体共用查询、详情和工作副本编辑协议。
 
 ## 接入顺序
 
 1. 确认目标实例的根地址，读取 `GET /api/openapi.json`。
 2. 读取 `GET /api/catalog/definitions`，获取字段、词项、结构和关系规则。
 3. 查询实体并解析合并身份，按需要读取目录、收录或关系。
-4. 需要写入时配置凭据、检查权限，提交说明、来源和当前版本。
+4. 需要编辑时配置凭据、检查权限，创建工作副本，保存修改并 commit、push。
 5. 按分页标记继续查询；按 HTTP 状态和机器错误码处理失败。
 
 公开数据可匿名查询。完整接口形状以目标实例为准，本文示例不代表某实例已有对应数据。
@@ -51,11 +51,11 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 读取关联事实与实际收录 | `GET .../:id/links`、`.../:id/occurrences` | [实体查询与详情](/api-entities) |
 | 读取发行目录、表达组成与版本组 | `GET /api/catalog/releases/:id/toc`、`.../:id/editions`、`GET /api/catalog/expressions/:id/composition` | [实体查询与详情](/api-entities) |
 | 批量表达与对比 | `POST /api/catalog/expressions/details`、`GET /api/catalog/compare` | [实体查询与详情](/api-entities) |
-| 获取可编辑工作副本 | `POST /api/catalog/checkout` | [工作副本与提交](/api-commits) |
-| 预览与原子推送一批修改 | `POST /api/catalog/commits/preview`、`POST /api/catalog/commits` | [工作副本与提交](/api-commits) |
-| 查询提交回执并恢复未知结果 | `GET /api/catalog/commits/:id` | [工作副本与提交](/api-commits#断线与重试) |
-| 新建、编辑、关系与单条收录 | `/api/catalog/entities`、`/relations`、`/tracks/:id/contents` | [新建与编辑](/api-edit) |
-| 合并、停用与下架 | `POST .../:id/lifecycle`、`.../:id/unpublish` | [新建与编辑](/api-edit) |
+| 创建与读取服务器工作副本 | `POST/GET /api/catalog/workspaces` | [工作副本与提交](/api-commits) |
+| 多次暂存、提交并推送一批修改 | `PUT /api/catalog/workspaces/:id/changes`、`POST .../:id/commits`、`POST .../:id/push` | [工作副本与提交](/api-commits) |
+| 读取不可变提交并恢复未知结果 | `GET /api/catalog/commits/:id` | [工作副本与提交](/api-commits#断线与重试) |
+| 新建、编辑、关系与单条收录 | `PUT /api/catalog/workspaces/:id/changes` | [新建与编辑](/api-edit) |
+| 实体身份合并与退役 | `POST /api/catalog/entities/:id/lifecycle` | [新建与编辑](/api-edit) |
 | 外部来源查询与实例交换 | `/api/external-sources/*`、`/api/exchange/*` | [新建与编辑](/api-edit) |
 | 定义、货架与外部库配置 | `/api/admin/catalog-definitions`、`/shelves`、`/external-databases` | [动态定义与配置](/api-definitions) |
 | 收藏、讨论、私信与举报 | `/api/community/*`、`/api/favorites/*`、`/api/messages/*` | [社区与互动 API](/api-community) |
@@ -68,15 +68,11 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 
 ## 状态与可见性
 
-| 状态 | 详情可见性 |
-| --- | --- |
-| `published` | 所有人 |
-| `draft` / `pending_review` | 创建者和具有生命周期管理权限的人 |
-| `deleted` / `merged` | 创建者和具有生命周期管理权限的人可直读；合并身份使用 `identity` 或 `resolve` |
+条目生命周期 `state` 只有 `active`、`deleted`、`merged`。正常公开条目为 active，`review_status=reviewed` 是已生效资料的只读标记，没有草稿或发布状态。
 
 普通列表排除 deleted / merged。关系、收录和历史响应还会过滤不可见端点与引用；公开响应不能当作全库备份。
 
-写入需要登录。没有 `catalog.entity.edit` 时，只能维护自己的未发布条目并保存为 draft / pending_review。关系、生命周期和定义管理各有权限码，见[新建与编辑](/api-edit)。
+编辑需要登录。工作副本和未合入提交按所有者、协作者与管理权限隔离；只有正式合入才更新公开条目。普通账号 push 发起 PR，免审账号可直接合入，关系和实体操作仍受各自编辑权限限制。见[工作副本与提交](/api-commits)。
 
 ## 分页与查询完整性
 
@@ -88,7 +84,7 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 
 ## 限流
 
-目录业务 API 默认按账号共用每分钟 180 次的预算，读写合计；匿名按客户端 IP 计数。实体查询、候选、checkout、提交预览和推送等均消耗同一主体的额度，切换路由或 HTTP 方法不会获得额外预算。计数使用数据库固定分钟窗口，目录服务的多个副本共用额度。
+目录业务 API 默认按账号共用每分钟 180 次的预算，读写合计；匿名按客户端 IP 计数。实体查询、候选、副本、commit 和 push 等均消耗同一主体的额度，切换路由或 HTTP 方法不会获得额外预算。计数使用数据库固定分钟窗口，目录服务的多个副本共用额度。
 
 实例策略按账号、组和全局配置覆盖默认值，账号规则优先，多组取最宽松规则。admin 组默认无限，显式账号规则或 admin 组规则可收回该默认；免限流不免权限校验。策略维护见[动态定义与配置](/api-definitions#目录限流策略)。
 
@@ -103,14 +99,15 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 400 `invalid_payload` | 核对字段、参数与当前 schema，避免重放同一错误载荷 |
 | 400 `invalid_limit` / `invalid_offset` / `invalid_page` / `pagination_conflict` | 修正分页值，避免组合互斥参数 |
 | 400 `invalid_reference` | 核对 kind、归属、可见性与合并身份 |
-| 400 `evidence_required` / `invalid_source` / `source_not_eligible` | 补充修改说明与可核验来源；新证据不能使用本站自身页面或 `self` |
+| 400 `invalid_source` | 提供了来源时核对其格式；来源可省略，不补造占位值 |
 | 400 `invalid_external_key` / `invalid_external_category` / `invalid_external_id` | 按实例注册表核对外部库码、实体种类与编号格式，见[新建与编辑](/api-edit#外部标识) |
 | 401 `authentication_required` / `invalid_token` | 获取有效凭据；PAT 不会因失效退为匿名 |
 | 403 `forbidden` | 核对账号权限、令牌 scopes 与条目可写范围 |
 | 404 `not_found` | 不存在或不可见，不能进一步区分 |
-| 409 `version_conflict` | 回读并合并修改，再用最新版本或 ETag 提交 |
+| 409 `workspace_version_conflict` / `workspace_head_conflict` / `pull_request_version_conflict` | 回读副本或 PR，保留未保存修改，再使用最新版本与 head |
+| 409 `version_conflict` | 配置或生命周期版本已过期；回读并合并后使用最新版本或 ETag |
 | 409 `idempotency_conflict` | 同一幂等键对应了不同载荷；核对任务身份，勿盲目换键重复创建 |
-| 409 `commit_conflict` / `definitions_conflict` / `identity_candidates_changed` | 回读并重新审查字段、定义或身份候选；提交错误和恢复步骤见[工作副本与提交](/api-commits#机器错误码) |
+| 409 `workspace_conflict` | 比较基线、正式值和副本值，解决冲突后 rebase；见[工作副本与提交](/api-commits#多人编辑与冲突) |
 | 429 `rate_limited` | 按 Retry-After 等待，减少并发与重复请求 |
 | 503 `rate_limit_unavailable` | 共享计数依赖不可用；等待恢复，不作为无限额度或零计数 |
 | 5xx | 视为服务或依赖故障；不能当作实体缺失或零命中 |

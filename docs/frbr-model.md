@@ -30,7 +30,7 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | --- | --- |
 | `id` / `kind` | UUID 与固定种类 |
 | `version` / `state` | 乐观锁版本与生命周期（active / deleted / merged） |
-| `review_status` | 已生效条目只读审核标记 reviewed；待审状态属于提交 |
+| `review_status` | 已生效条目只读审核标记 reviewed；待合并状态属于 PR |
 | `title` / `original_language` | 基础题名与原始语言 |
 | `translations` | 按语言标签分组的对象，各项含 `title`、简短纯文本 `summary`、Markdown 条目正文 `body`、`aliases`；正文与实体共同修订 |
 | `attributes` | 动态属性，允许键及适用种类由 definitions 决定 |
@@ -84,7 +84,7 @@ Track 的 `contents[]` 是实际收录的权威来源：
 
 `locator` 与附加属性按 definitions 的组字段及场景方案校验。定位仅属于这次收录，不随 Expression 在不同发行之间复制。
 
-整体写入 Track 时，未提供逐条 `sources` 的收录采用本次编辑来源；需要保留原证据时显式带回该数组，见[编辑实体](/api-edit#编辑实体)。
+收录 `sources` 可省略；修改时保留未编辑收录与历史来源。单条收录在[工作副本中编辑](/api-edit#编辑实体与收录)。
 
 ## 关系
 
@@ -96,6 +96,6 @@ definitions 声明的实体属性引用也投影为 reference 链接，支持嵌
 
 ## 状态与修订
 
-生命周期 `state` 只有 `active`、`deleted`、`merged`，没有草稿或发布状态。正常条目至少有一条语言资料，`review_status=reviewed` 为只读标记。普通提交进入审核队列，审核期间不改变当前条目内容、版本和标记；免审提交立即生效，见[工作副本与提交](/api-commits)。可见性见[API 概览](/api-overview)。
+生命周期 `state` 只有 `active`、`deleted`、`merged`，没有草稿或发布状态。正常条目至少有一条语言资料，`review_status=reviewed` 为只读标记。工作副本和 commit 不改变当前条目；普通账号 push 发起 PR，免审账号 push 可直接合入，见[工作副本与提交](/api-commits)。可见性见[API 概览](/api-overview)。
 
-每次写入带修改说明与来源，保留修订快照。合并、停用和下架通过专用生命周期入口执行；载荷与错误处理见[新建与编辑](/api-edit)。
+正式合入保留作者、修改说明与修订快照；来源可省略。实体身份合并与退役通过专用生命周期入口执行；载荷与错误处理见[新建与编辑](/api-edit)。

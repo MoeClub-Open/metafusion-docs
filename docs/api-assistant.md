@@ -55,7 +55,7 @@ group: "api"
 
 新会话省略 `conversation_id`；省略 `model_id` 时使用会话或站点默认模型。省略 `credential_id` 时沿用会话的凭据，显式传 `"credential_id":""` 切回平台额度。`message` 必须为非空 UTF-8，最多 32768 字节。
 
-返回 `conversation_id`、`answer`、累计 `usage`、`credits_spent`、`balance`，以及可选 `tool_results`、`commit_receipts`、`error`。工具可读取定义、实体、身份候选、关系、工作副本和公开来源，修改只走目录不可变提交。普通提交待审，免审提交直接应用；每个操作仍需要真实的 `source_refs`。不提供任意 SQL、任意身份或绕过审核参数。
+返回 `conversation_id`、`answer`、累计 `usage`、`credits_spent`、`balance`，以及可选 `tool_results`、`commit_receipts`、`error`。工具可读取定义、实体、身份候选、关系、工作副本和公开来源，修改统一在服务器工作副本中 stage、commit、push。普通账号发起 PR，免审账号可直接合入；不要求来源池、source_refs 或查证记录。不提供任意 SQL、任意身份或绕过审核参数。
 
 一次请求总执行时间最多 150 秒，工具轮数由站点配置为 1–12，每轮最多 8 次工具调用。达到限制或后续上游失败时，响应仍保留已经发生的提交回执和用量，调用方必须同时检查 `error` 与 `commit_receipts`，不能把整轮当作未写入。
 

@@ -86,7 +86,7 @@ group: "api"
 | `GET /api/admin/external-databases`、`POST /api/admin/external-databases` | 列出或创建外部库，需要 `catalog.definitions.manage` |
 | `PUT /api/admin/external-databases/{code}`、`DELETE /api/admin/external-databases/{code}` | 替换或删除指定外部库，需要 `catalog.definitions.manage`；字段按 OpenAPI 的 `ExternalDatabase` 与四语名称约束填写 |
 
-货架 query 支持 tags / fields / vocab_terms / relations：条件间 AND，同数组内 OR。空 query 收录全部已发布 Work。sort 为 `updated`、`created` 或 `title`；名称需四语。
+货架 query 支持 tags / fields / vocab_terms / relations：条件间 AND，同数组内 OR。空 query 收录全部 active Work。sort 为 `updated`、`created` 或 `title`；名称需四语。
 
 权威库登记决定编号与外链是否可用，不自动产生查询适配器。实际可查询来源由 `GET /api/external-sources` 提供，见[新建与编辑](/api-edit)。
 

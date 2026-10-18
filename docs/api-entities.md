@@ -26,7 +26,7 @@ GET /api/catalog/entities?kind=medium&release_id=<release_id>
 |---|---|
 | `kind` | 单个 kind 过滤 |
 | `kinds` | 多值 kind（重复出现或逗号分隔，命中任一即返回） |
-| `status` | 状态过滤（`draft` / `pending_review` / `published` …）；可见性另见 [API 概览](/api-overview) |
+| `state` | 生命周期过滤 active / deleted / merged；普通列表排除 deleted / merged，可见性另见[API 概览](/api-overview) |
 | `original_language` / `has_pictures` | 原始语言精确筛选 / `has_pictures=1` 仅返回有图实体 |
 | `q` | 关键词查询，匹配、索引计数与分页见[检索](/api-search) |
 | `field` + `value` | 按 `document` 内属性字段精确过滤（支持点分路径，见下） |
@@ -103,11 +103,11 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 
 `kind` 必填，至少提供一类条件，每类最多 20 项、每个值最多 256 字节。条件之间为 OR：题名匹配基础题名、翻译题名及别名，忽略大小写并合并空白；外部 ID 和标量/标量数组属性按文本精确比较。Expression/ContentUnit 可用 `work_id` 限定所属 Work，Medium 可用 `release_id` 限定 Release，Track 可用 `medium_id` 限定 Medium。相同题名、时长或版次属性只能定位候选，不能确认身份。
 
-响应包含 `items`、`total`、`complete`、`basis="postgres_repeatable_read"`。每项含 `matched` 原始实体摘要和 `canonical` 保留实体摘要；不能解析时 `canonical=null` 并带 `resolution_error`。摘要不能用于实体 PUT。
+响应包含 `items`、`total`、`complete`、`basis="postgres_repeatable_read"`。每项含 `matched` 原始实体摘要和 `canonical` 保留实体摘要；不能解析时 `canonical=null` 并带 `resolution_error`。摘要不能当作完整的副本编辑文档。
 
 `total` 是该快照中命中的原始实体数；`limit` 为 1–1000，默认 1000。超过上限时 `complete=false`，应收窄过宽条件，不能把部分结果当成没有重复。查询仅覆盖调用者可见范围，排除已删除原始实体；零候选不证明不可见范围内没有重复。候选查询与其他目录请求共用每账号或匿名客户端 IP 每分钟 180 次的默认预算，见[限流](/api-overview#限流)。
 
-创建前使用此接口查重，不用跨页扫全库，也不靠关键词搜索的异步索引证明实体不存在。候选查询不锁定后续创建；多个 Agent 仍应分配不同任务范围，已存在身份应复用，创建结果未知时保留原幂等键并先核对结果。
+创建前使用此接口查重，不用跨页扫全库，也不靠关键词搜索的异步索引证明实体不存在。候选查询不锁定后续创建；多个 Agent 仍应分配不同任务范围，已存在身份应复用，创建结果未知时先核对副本和原 commit，避免重复新建。
 
 ## 实体详情
 
@@ -126,7 +126,7 @@ GET /api/catalog/entities/:id/revisions  # 修订历史
 - `/revisions` 按目标实体逐行过滤可见性；Track 历史快照中的收录也按表达当前可见性裁剪，原始事实仍保留在库中。关系修订的 `target_id` 是关系 id 本身
 - `/links` 是固定结构与语义关系的统一只读投影；语义关系仍经 `/relations` 写入，不复制结构边。
 
-实体详情包含当前 version，但不是全库事实的无损导出。Track 的 contents 会过滤当前不可见的 Expression；编辑时不要把可见性裁剪后的结果整实体 PUT，以免误删历史引用。维护单条收录时可用[单条收录接口](/api-edit#单条收录)，整实体编辑须先确认有权读取和保留全部收录。
+实体详情包含当前 version，但不是全库事实的无损导出。Track 的 contents 会过滤当前不可见的 Expression；编辑时不要把可见性裁剪后的结果整份覆盖，以免误删历史引用。维护单条收录使用[工作副本的 content 操作](/api-edit#编辑实体与收录)。
 
 ### 身份解析和统一关系读取
 
@@ -140,9 +140,9 @@ GET /api/catalog/entities/:id/revisions  # 修订历史
 
 | 规则码 / class | 权威数据与编辑方式 |
 | --- | --- |
-| `structure:*` / ownership、placement、inclusion | 固定归属、父子、subjects 与 contents，由拥有者实体或单条收录入口编辑 |
-| `relation:*` / semantic | 动态语义关系，通过 relations 端点编辑 |
-| `attribute:<path>` / reference | definitions 声明的实体属性引用，含嵌套 group/list，通过实体属性编辑 |
+| `structure:*` / ownership、placement、inclusion | 固定归属、父子、subjects 与 contents，在工作副本中修改拥有者实体或单条收录 |
+| `relation:*` / semantic | 动态语义关系，在工作副本中编辑 relation |
+| `attribute:<path>` / reference | definitions 声明的实体属性引用，含嵌套 group/list，在工作副本中修改实体属性 |
 
 例如规则码 `attribute:attachments[].content` 表示列表中的引用类型，具体 link.field 为 `attachments[0].content`。关系、发行对象和收录的附加引用在 `references:[{field,entity_id}]` 中保留原路径；当被查询主体是上下文引用而不是 source/target 时，`via:[field,...]` 标出匹配路径。引用只按定义解析，不从普通字符串猜测实体关系。
 
@@ -230,7 +230,7 @@ POST /api/catalog/expressions/details
 | 端点 | 用途 |
 |---|---|
 | `GET /api/catalog/definitions` | 已发布的动态定义与固定骨架的多语言 kind 名 |
-| `GET /api/catalog/tags` | 标签频次聚合（只统计已发布实体） |
+| `GET /api/catalog/tags` | 标签频次聚合（只统计 active 实体） |
 | `GET /api/catalog/shelves` | 已启用的虚拟货架规则 |
 | `GET /api/catalog/shelves/feed` | 每个货架加求值后的条目 |
 | `GET /api/catalog/external-databases` | 可用的外部权威库定义（`external_links[].kind` 的合法平台码） |
@@ -256,46 +256,29 @@ POST /api/catalog/expressions/details
 
 ## 用户贡献流
 
-用户主页的贡献视图（前端 `all` / `revisions` / `works` / `releases` / `artists` 五个 tab）由目录服务提供：
+用户主页展示已合入的提交、涉及条目、PR 与贡献日历：
 
 ```http
-GET /api/users/:id/contributions?tab=all&page=1&page_size=20
+GET /api/users/:id/contributions?year=2026&page=1&page_size=20
 ```
 
 | 参数 | 说明 |
-|---|---|
-| `tab` | `all` / `revisions` / `works` / `releases` / `artists`；其余取值 `400 invalid_tab` |
-| `page` / `page_size` | `page` 小于 1 时取 1；`page_size` 默认 20，超出 1–100 时取 20，不报错；与实体列表的严格分页校验不同 |
+| --- | --- |
+| `year` | 缺省当前 UTC 年；显式值为 1970–9999 |
+| `page` | 从 1 起，小于 1 时取 1 |
+| `page_size` | 默认 20，范围 1–100；越界回落 20 |
 
-各 tab 的口径：
+响应包含 `year`、`timezone:"UTC"`、`summary`、`calendar`、`items`、`total`、`page` 与 `page_size`：
 
-- `all`（默认）：创建事件与后续改动按时间混排
-- `revisions`：全部实体修订行，含首次创建
-- `works` / `releases` / `artists`：只列该用户创建的对应实体
-- topics / comments 一类属互动服务的口径，不在这里静默返回空列表
+- `summary` 为 `merged_commits`、`changed_entities`、`created_entities`、`merged_pull_requests`、`legacy_revisions`。
+- `calendar` 为所选年份的每日 `{date,count}`，包括零贡献日期。日期按实际合入时间的 UTC 日统计。
+- `items` 每项含 `id`、可选 `commit_id`、`message`、`authored_at`、`merged_at`、`author:{id,name}`、`authors:[{id,name}]`、可选 `merged_by:{id,name}`、`pull_request_id`、`changes_count`、`entities:[{id,kind,title}]` 与 `legacy`。
 
-响应 `{items, total, page, page_size, stats}`：`total` 是同口径下的真实计数（不是本页条数），`page` / `page_size` 是收敛后的取值。
+一个多对象 commit 对每位真实参与者只算一次合入贡献。author 为实际创建 commit 的人，authors 保留服务器记录的全部编辑参与者，客户端不能任意指定作者；PR 内多个 commit 分别保留作者，合并者另记。未关联 commit 的历史修订标记 `legacy:true`，不伪造提交或父链。缺少历史昵称时 name 可回落为用户 ID。
 
-`stats` 恒为五个全量计数，不随 `tab` 变化：
+私有副本、未合入提交和不可见目标不公开。一个 commit 的部分目标不可见时，不返回其 message 内容与 PR ID；全部目标不可见时，整项与对应计数均排除。审核操作或审计日志不当作编辑贡献。
 
-| 字段 | 口径 |
-|---|---|
-| `works_created` / `releases_created` / `artists_created` | 该用户创建的对应实体（前端的 `artists` 对应骨架里的 `agent` kind） |
-| `revisions_count` | 该用户在可见实体上的全部修订行数（含首次创建行） |
-| `audit_actions` | 该用户执行过的生命周期管理动作次数（`entity.deleted` / `entity.merged`） |
-
-三个 created 计数只包含当前对请求方可见的实体；`audit_actions` 不随目标当前状态变化。
-
-`items` 有两种项，字段沿用既有端点：
-
-- **创建项**（`works` / `releases` / `artists` tab，以及 `all` 里的创建事件）：`id` 是实体 id，带 `tab`（对应该实体所属 tab）、`status` 与实体自身的 `updated_at`，`edit_type` 为 `create`
-- **修订项**（`revisions` tab，以及 `all` 里的后续改动）：`id` 是修订行 id，实体 id 落在 `target_id`，带 `version` / `edit_note` / `sources` / `created_at`
-- 修订项 `version > 1` 时 `edit_type` 为 `update` 并带 `diff`：字段级的 `old` / `new`，`attributes` 与 `translations` 下钻一层（如 `attributes.tags`、`translations.zh-CN`）
-- `id` / `version` / `created_by` / `created_at` / `updated_at` 这类每次都会变的键不进差异；单个值超过 512 字节时截断成字符串前缀
-
-可见性与实体列表同一口径：未发布只对创建者与持 `catalog.lifecycle.manage` 者可见，`deleted` / `merged` 对所有人不可见。因此列表与统计都不会泄漏草稿。
-
-贡献响应不判断账号是否存在，也不返回昵称、头像等账号资料：合法 UUID 没有贡献时返回 200、空列表和零计数，不能据此推断账号存在。公开资料见[认证与凭证](/api-auth#公开账号资料)。非法 UUID 返回 `404 not_found`，非法 tab 返回 `400 invalid_tab`；限流见[API 概览](/api-overview#限流)。
+该接口不返回账号资料，也不因合法 UUID 的空贡献列表证明账号存在；账号资料见[认证与凭证](/api-auth#公开账号资料)。历史修订和 commit 的公开详情仍需各自访问校验，不能凭贡献条目绕过可见性。
 
 ## 相关页面
 
