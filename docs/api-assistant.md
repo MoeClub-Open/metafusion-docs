@@ -37,7 +37,20 @@ group: "api"
 }
 ```
 
-接口只返回 `has_key/key_hint`，不回显密钥。更新不传 `api_key` 保留原密钥，传新值替换。凭据只能由其所有者用于调用；管理权限不赋予代用他人密钥的能力。可选 `upstream_model` 覆盖所选模型的上游名称，空值沿用站点模型配置；仍受所选模型的上下文与输出 token 上限约束。当前协议为 `openai_compatible`，服务端在 `base_url` 后追加 `/chat/completions`，使用非流式工具调用与上游 usage 结算。
+接口只返回 `has_key/key_hint`，不回显密钥。更新不传 `api_key` 保留原密钥，传新值替换。凭据只能由其所有者用于调用；管理权限不赋予代用他人密钥的能力。可选 `upstream_model` 覆盖所选模型的上游名称，空值沿用站点模型配置；仍受所选模型的上下文与输出 token 上限约束。
+
+Provider 和 BYO 凭据共用 `protocol` 字段，默认 `openai_compatible`：
+
+| protocol | 路径 | 认证 |
+| --- | --- | --- |
+| `openai_compatible` | `/chat/completions` | `Authorization: Bearer` |
+| `openai_responses` | `/responses` | `Authorization: Bearer` |
+| `anthropic_messages` | `/messages` | `x-api-key` 和固定 `anthropic-version` |
+| `gemini_generate_content` | `/models/{model}:generateContent` | `x-goog-api-key` |
+
+`base_url` 包含版本前缀，见[接入示例](/assistant)。请求非流式，工具声明、调用及结果按所选格式转换，不通过失败重试探测格式。Responses 使用 `store=false`；返回的推理项、Claude 签名块及 Gemini thought signature 保存在本人会话的 `provider_context`，只回传到相同端点、凭据密钥和模型，不向其他连接传递。前端只展示可见回答，不展示这些协议元数据。
+
+用量统一为 `input_tokens/output_tokens/cached_input_tokens`：Anthropic 输入包括普通输入、缓存读取和缓存创建；Gemini 输出包括候选输出与思考 token；Responses 使用其 input/output 及缓存输入字段。缺失 usage 不视为免费成功，沿用既有不重复调用与估算结算规则。
 
 ## 问答与修改
 

@@ -11,7 +11,7 @@ group: "intro"
 
 ## 查询与编辑
 
-登录后从顶栏打开「AI 助手」（`/assistant`），选择站点提供的模型，描述问题或修改要求。页面的「问答」「自备 API」「用量记录」分别管理会话、连接和消耗。可以直接附上词条链接、编号和来源，例如：
+登录后从顶栏打开「AI 助手」（`/assistant`），选择站点提供的模型，描述问题或修改要求。页面的「问答」「自备 API」「用量记录」分别管理会话、连接和消耗。桌面在左侧切换会话；手机点击会话按钮打开左侧抽屉，选择后自动关闭，也可点遮罩或关闭按钮返回。可以直接附上词条链接、编号和来源，例如：
 
 ```text
 查询 UMCK-1766 对应发行版，说明发行主体、收录内容和关联作品。
@@ -40,7 +40,16 @@ group: "intro"
 
 ## 使用自己的 API（BYO）
 
-在助手的 API 凭据管理中添加名称、公开 HTTPS API 根地址和密钥。当前接入支持 OpenAI 兼容的 Chat Completions 协议；根地址应包含服务商要求的版本路径，例如 `https://provider.example/v1`。默认使用所选站点模型的上游模型名，也可在 BYO 凭据中填写自己的上游模型名；输入上下文与最大输出仍受所选站点模型的 token 上限约束。
+在助手的 API 凭据管理中添加名称、接口格式、公开 HTTPS API 根地址和密钥：
+
+| 接口格式 | 根地址示例 | 调用路径 |
+| --- | --- | --- |
+| OpenAI Chat Completions | `https://api.openai.com/v1` | `/chat/completions` |
+| OpenAI Responses | `https://api.openai.com/v1` | `/responses` |
+| Anthropic Messages | `https://api.anthropic.com/v1` | `/messages` |
+| Gemini GenerateContent | `https://generativelanguage.googleapis.com/v1beta` | `/models/{model}:generateContent` |
+
+其他服务商按它实际实现的格式选择，根地址保留服务商要求的版本路径。默认使用所选站点模型的上游模型名，也可在 BYO 凭据中填写自己的上游模型名；输入上下文与最大输出仍受所选站点模型的 token 上限约束。接口格式显式配置，失败不会自动换格式或再次调用。后台 Provider 使用同一套格式选择。
 
 配置自己的凭据后，模型旁会出现可选的「自备 API」选择器；选择后不消耗积分和平台 API 预算，仍记录 token 用量，服务商可能按自己的规则计费。密钥加密保存，只显示是否已配置与末尾提示，可以改名、替换、停用或删除。管理员能管理凭据记录，不能通过列表读取完整密钥。
 
