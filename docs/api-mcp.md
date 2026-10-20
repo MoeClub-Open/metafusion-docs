@@ -48,7 +48,10 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 | metafusion_workspace_create / list / get / edit / checkout / members | 创建和维护服务器副本，加入记录与协作者 |
 | metafusion_workspace_stage / commit / commits / push / rebase | 多次暂存、不可变提交、推送与三方冲突解决 |
 | metafusion_pull_request_create / list / get / edit / merge | 创建、审阅和合并 PR |
-| metafusion_commit_get | 读取不可变提交及其合入状态 |
+| metafusion_workspace_fork / version / status / events | 派生、合并、挑选、撤销、恢复和整理提交；读取状态与操作历史 |
+| metafusion_workspace_tags / tag / stashes / stash | 标签与搁置改动 |
+| metafusion_catalog_head / history | 正式目录 head 与分页合入历史 |
+| metafusion_commit_get / snapshot / compare / blame | 不可变提交、分页快照/对比及字段归属 |
 | metafusion_file_inspect / upload | 根据 Agent 提供的 URL 或内容，在云端计算摘要、上传并绑定文件 |
 | metafusion_web_search | 全网搜索，返回标题、URL、摘要与抓取证据；与站内 metafusion_search 分开 |
 | metafusion_http_request | 显式请求公开 HTTP(S) 网页/API，支持查询、第三方请求头和 JSON/text/base64 载荷 |
@@ -56,7 +59,7 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 
 动态字段仍以 definitions 为准，分页、冲突码和失败结果沿用原生 API。编辑先创建 workspace，按需 checkout，再多次 stage 和 commit，最后 push。stage 传 `expected_version` 与 `operations`；commit 传固定 `id`、`expected_version` 与 `message`；push 传 `expected_version`、`expected_head` 和可选 `title`。普通账号获得 PR，免审账号可直接合入。完整载荷见[工作副本与提交](/api-commits)。
 
-来源与查证记录可省略，不要求来源池、每操作 source_refs 或候选确认。未知结果回读原 commit、workspace 与 PR，不重复创建。真实冲突比较基线、正式值与副本值，明确解决后 rebase，再 push。未合入的私有活动不进入公开贡献流。
+来源与查证记录可省略，不要求来源池、每操作 source_refs 或候选确认。未知结果回读原 commit、workspace 与 PR，不重复创建。真实冲突比较基线、当前值与副本值；正文支持行级自动合并。rebase 可指定 onto_commit_id 与 order，逐提交重放并保留原作者、原提交和替代关系；多步冲突使用 commit_id 区分并保留先前解决项，完成后再 push。所有历史列表按 total/limit/offset 翻页。未合入的私有活动不进入公开贡献流。
 
 文件 URL 必须是服务端可访问的公开 HTTPS 地址。URL 文件上限 1 GiB；base64 受 8 MiB 请求体上限约束。工具失败时保留 asset_id，检查原生存储状态后再处理。
 

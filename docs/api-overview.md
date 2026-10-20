@@ -53,6 +53,7 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 | 批量表达与对比 | `POST /api/catalog/expressions/details`、`GET /api/catalog/compare` | [实体查询与详情](/api-entities) |
 | 创建与读取服务器工作副本 | `POST/GET /api/catalog/workspaces` | [工作副本与提交](/api-commits) |
 | 多次暂存、提交并推送一批修改 | `PUT /api/catalog/workspaces/:id/changes`、`POST .../:id/commits`、`POST .../:id/push` | [工作副本与提交](/api-commits) |
+| 正式历史、冻结快照和分支操作 | `GET /api/catalog/head`、`GET /api/catalog/history`、`POST .../workspaces/:id/version` | [版本管理](/api-commits#分支与版本操作) |
 | 读取不可变提交并恢复未知结果 | `GET /api/catalog/commits/:id` | [工作副本与提交](/api-commits#断线与重试) |
 | 新建、编辑、关系与单条收录 | `PUT /api/catalog/workspaces/:id/changes` | [新建与编辑](/api-edit) |
 | 实体身份合并与退役 | `POST /api/catalog/entities/:id/lifecycle` | [新建与编辑](/api-edit) |
