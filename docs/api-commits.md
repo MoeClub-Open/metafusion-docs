@@ -35,7 +35,7 @@ group: "api"
 | `PUT /workspaces/:id/changes` | `{expected_version, operations}` | `{workspace, refs}` |
 | `PUT /workspaces/:id/members` | `{expected_version, user_ids}` | `Workspace` |
 | `POST /workspaces/:id/commits` | `{id, expected_version, message}` | `CollaborationCommit` |
-| `GET /workspaces/:id/commits` | `limit` / `offset` | `{items,total,limit,offset}`，新到旧 |
+| `GET /workspaces/:id/commits` | `limit` / `offset` / `target` / `record_id` / `author_id` / `since` / `until` / `state` | `{items,total,limit,offset}`，新到旧 |
 | `POST /workspaces/:id/push` | `{expected_version, expected_head, title?}` | `WorkspacePushResult` |
 | `POST /workspaces/:id/rebase` | `{id, expected_version, expected_head, onto_commit_id?, order?, message?, resolutions?}` | `{workspace, commit}` |
 | `GET /commits/:id` | 无 | `CollaborationCommit` |
@@ -172,7 +172,22 @@ amend/squash/reset 由副本所有者执行，不能改写已合入历史；其�
 | `GET /commits/:id/compare?base=UUID` | `{base_id,head_id,changes,total,limit,offset}` |
 | `GET /commits/:id/blame?target=entity&record_id=UUID&pointer=/title` | 保留提交图中最近修改该字段的可读编辑提交 |
 
-列表、历史、快照和对比默认 `limit=20`，最大100，使用 `offset` 翻页。`blame` 提供字段级归属，不是逐字符作者统计。
+列表、历史、快照和对比默认 `limit=20`，最大100，使用 `offset` 或互斥的 `page` 翻页。`blame` 提供字段级归属，不是逐字符作者统计。
+
+### 筛选历史与读取差异
+
+| 接口 | 用途与响应 |
+| --- | --- |
+| `GET /workspaces/:id/diff?basis=head` | 工作内容相对最近提交的差异；`basis=base` 比较 checkout 基线。响应含 `workspace_id,version,head_id,basis,changes,total,limit,offset`，仅成员可读 |
+| `GET /commits/:id/diff` | 某一不可变提交原本记录的修改，响应含 `commit_id,parent_id,changes,total,limit,offset` |
+| `GET /pull-requests/:id/diff` | 当前 PR 版本冻结的净差异，响应含 `pull_request_id,version,source_head_id,source_base_id,changes,total,limit,offset` |
+| `GET /pull-requests/:id/commits` | PR 冻结提交集合，新到旧，响应含同一组 PR 版本字段及 `items,total,limit,offset` |
+
+以上差异接口以及 snapshot、compare 支持 `target=entity|relation`、`record_id=UUID`；这两个参数也可筛选正式 history、分支 commits、PR commits 中修改过相应记录的提交。所有筛选在计数和分页前执行，不扩大可见范围。`diff` 是原始提交修改或工作/提案净差异；`compare` 比较两个冻结记录集合。
+
+三类提交历史还支持 `author_id`（实际内容贡献者，非合并人）、`since`（含）和 `until`（不含），时间为 RFC3339，until 必须晚于 since。正式 history 按合入时间筛选，分支和 PR 按提交创建时间筛选。分支 commits 另支持 `state=active|pending|integrated|replaced|all`，默认 active；pending 只列待合入的活动提交，integrated 列已整合的活动提交，replaced 读取改写后保留的原提交。
+
+跨页读取时保留响应的 PR `version/source_head_id` 或副本 `version/head_id`，若其改变，应从第一页重新读取。PR 继续编辑前后，未重新推送的提交不会进入已冻结的 PR 差异和提交集合。
 
 `scope:catalog` 从迁移037的明确完整基线开始，按事务还原全部实体、结构侧表、subjects、contents 和关系，并在分页前应用当前访问权限。`tracked_records` 保存该分支当时追踪的完整记录集合；旧 `known_records` 仅包含真实保留下来的历史，不能据此声称掌握当时全站状态。账号、配置和文件字节属于各自服务，不在目录版本树中。
 

@@ -123,7 +123,8 @@ GET /api/catalog/entities/:id/revisions  # 修订历史
 - `/links` 的 `items` 是统一关系投影，`entities` 是按 id 索引的可见端点与引用实体（含被查询实体自身），`subject_id` 标出「哪个是自己」
 - 客户端据此直接渲染「谁→谁」，不必再逐条取实体
 - `/occurrences` 按 kind 收敛：`expression` 返回自身收录，`content_unit` / `work` 返回其表达被收录的情况
-- `/revisions` 按目标实体逐行过滤可见性；Track 历史快照中的收录也按表达当前可见性裁剪，原始事实仍保留在库中。关系修订的 `target_id` 是关系 id 本身
+- `/revisions` 返回 `{items,total,limit,offset}`，默认20条、最多100条，可用 offset 或互斥的 page 继续读取全部历史。支持 `version` 精确匹配修订号、`author_id` 原操作人，以及 RFC3339 `since`（含）/`until`（不含）的修订创建时间区间。查当前修订可用 `?version=<entity.version>&limit=1`，无需扫描历史。
+- 可见性检查先于计数和分页；Track 历史快照中的收录也按表达当前可见性裁剪，原始事实仍保留在库中。关系修订使用关系 ID 作为路径 id；已删除关系仍可查历史，但当前两端实体都必须 active。历史每行含 `id,version,actor_id,actor_name,edit_note,sources,snapshot,created_at`，有原提交关联时附 `commit_id`，snapshot 为实体或关系。
 - `/links` 是固定结构与语义关系的统一只读投影；语义关系仍经 `/relations` 写入，不复制结构边。
 
 实体详情包含当前 version，但不是全库事实的无损导出。Track 的 contents 会过滤当前不可见的 Expression；编辑时不要把可见性裁剪后的结果整份覆盖，以免误删历史引用。维护单条收录使用[工作副本的 content 操作](/api-edit#编辑实体与收录)。
