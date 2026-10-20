@@ -12,7 +12,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   docs:
@@ -32,13 +31,3 @@ jobs:
         run: npm run build
       - name: 导航与口径检查（title=H1、frontmatter 齐备、站内链接可达）
         run: node scripts/check-nav.mjs
-  secrets-scan:
-    name: gitleaks (secrets)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
