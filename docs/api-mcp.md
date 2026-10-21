@@ -25,6 +25,8 @@ MCP 与[技能仓库](https://github.com/MoeclubM/metafusion-skills)提供的是
 
 客户端配置使用 OAuth、动态客户端注册（DCR）与实例的 `/mcp` 地址；关闭 OIDC（若客户端提供此选项）。MCP 不提供 OIDC 身份服务或 ID token。对客户端附加的 `openid`、`email`、`profile`，授权流程只授予用户选择的平台权限，令牌响应的 `scope` 返回实际授予范围；这些身份 scope 不会进入 API 凭据。未知的业务 scope 仍会被拒绝。
 
+DCR 允许匿名注册第三方 HTTPS 回调（本地开发允许回环 HTTP），不代表应用获得站点核验或授权。注册按真实连接对端限流（每进程每分钟 180 次，经同一反代的请求共用预算）。客户端名称由注册者提供，请在同意页核对完整回调地址与所选权限；只有站内会话明确批准后才签发绑定该回调的授权码，换码还须匹配 PKCE S256 verifier。允许第三方回调本身不是绕过授权。
+
 客户端省略 scope 时，同意页只提供 `mcp.read` 与 `catalog.entity.edit`，默认只预选 `mcp.read`；用户可保持只读，不具备编辑权限的账号也可连接。新授权不接受 `*` 或任何 `.manage` 权限码。只读连接的专用委托凭据仅携带 `mcp.connect` 身份能力，业务写入仍需显式选择相应权限。
 
 `mcp.read` 也允许全网搜索和公开网页/API 的 GET、HEAD、OPTIONS 请求。外部 POST、PUT、PATCH、DELETE 请求需要客户端显式请求 `mcp.web.write`，并由用户在同意页勾选。此权限只由 MCP 管理，不进入平台委托凭据，也不授予 MetaFusion 数据编辑权限；既有只读授权不能执行外部写请求。

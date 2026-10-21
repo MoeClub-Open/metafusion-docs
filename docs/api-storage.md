@@ -81,7 +81,7 @@ Content-Type: application/json
 - `is_instant_upload: true`：已有同一 SHA-256、服务端已验证且当前可读的资产，无需再上传。摘要本身不授予读取权限；不可读的既有资产返回 404
 - 新建资产时可同时按 `target_entity_id` 建绑定；秒传复用时新增绑定仍须为上传者本人或持审核权限，其他可读者传目标会返回 403
 - 同一 SHA-256 的未完成资产不算秒传，上传者可续传；不会另建重复资产
-- 未配置对象存储端点时是本地对象模式：不返回预签名地址，而是给出 `direct_upload_url`，客户端把原始字节 `PUT` 到该地址即可（服务端边收边算 SHA-256 并校验）
+- 本地对象模式或未配置 `STORAGE_S3_PUBLIC_ENDPOINT` 时，不返回预签名地址，而是给出 `direct_upload_url`，客户端把原始字节 `PUT` 到该地址即可（服务端边收边算 SHA-256 并校验）；S3 模式下对象仍保存到 S3
 
 ::: warning 注意
 同一 SHA-256 的未完成上传由上传者本人续传（复用同一次分片会话），他人重传得到 `409 upload_in_progress`；
@@ -100,6 +100,7 @@ curl --fail-with-body -D part_1.headers -X PUT "<presigned_url_1>" --data-binary
 ::: warning 注意
 预签名 URL 的 host 参与签名，因此对象存储必须从客户端可达：编排里对象存储端口默认不对宿主机开放，
 需要浏览器直传时应经反代暴露并设置 `STORAGE_S3_PUBLIC_ENDPOINT`。
+留空时不会沿用内网端点签发地址，上传和下载均由存储服务流式中转。
 :::
 
 ## 完成上传
@@ -216,7 +217,7 @@ DELETE /api/storage/bindings/{binding_id}
 | GET | `/api/storage/assets/{id}` | 可读 | 文件元数据与绑定列表 |
 | GET | `/api/storage/assets?limit=50&offset=0&status=complete&name=cover` | 审核者 | 资产清单；状态和文件名可选筛选，按创建时间倒序 |
 | GET | `/api/storage/bindings?limit=50&offset=0` | 审核者 | 全站绑定清单，含所指资产，按创建时间倒序 |
-| GET | `/api/storage/download/{asset_id}` | 可读 | 对象存储模式返回预签名地址；本地模式直接流式下发 |
+| GET | `/api/storage/download/{asset_id}` | 可读 | 显式配置 S3 公开端点时返回预签名地址；否则由服务端流式下发 |
 | GET | `/api/storage/assets/{id}/content` | 可读 | 长期可引用的原档内联地址 |
 | POST | `/api/storage/verify-hash` | 探测匿名可用；按 asset 校验需登录 | 秒传探测或按 asset 校验摘要 |
 | GET | `/api/storage/stats` | 审核者 | 完成态文件数与占用字节、待完成数、禁发数（`storage.asset.moderate`） |
@@ -247,6 +248,8 @@ GET /api/storage/download/{asset_id}
 读取可见性只有一条口径：上传者本人或审核者（持 `storage.asset.moderate`）直通，
 其余人仅在资产已 `complete`、未被禁发且任一绑定目标实体可见时可读。
 :::
+
+上例为显式配置 `STORAGE_S3_PUBLIC_ENDPOINT` 时的响应；未配置时直接以附件形式返回文件字节，不返回 `download_url` 或内部对象地址。
 
 下载、元数据读取与哈希校验共用该判定；下载与内容入口还要求资产已完成。已签发的预签名 URL 在有效期内可能继续访问，解绑或禁发不会撤销对象存储签名；需要逐请求鉴权时使用 content 入口。
 不可读返回 404，不泄露他人上传的存在性；目录依赖不可用返回 `503 upstream_unavailable`，不能解释为文件不存在。
