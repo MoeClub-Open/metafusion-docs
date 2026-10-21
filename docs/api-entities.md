@@ -44,6 +44,8 @@ GET /api/catalog/entities?kind=medium&release_id=<release_id>
 
 无关键词浏览响应含 `items`、数据库计数 `total`、`total_relation="eq"` 和 `has_more`。关键词查询的索引计数与深分页标记见[检索](/api-search)。
 
+浏览、关键词检索与首页 `/api/catalog/shelves/feed` 还返回按条目 ID 索引的 `covers`：无自身封面的条目可借用关联作品、发行或载体的封面，包含 `url`、来源类型 `origin` 和来源条目 `from`（ID、原题名及多语言题名）。只采用当前可见的活动来源，界面注明借用来源；自身首图优先。此字段只用于显示，不会改写条目的 `pictures`；`has_pictures=1` 仍只筛选条目自身收录的图片。
+
 无关键词浏览默认按 `updated_at DESC, id`；带 `content_unit_id` / `release_id` / `medium_id` / `parent_id` 且未显式排序时改按 `position` 升序，
 便于直接渲染分碟与曲目顺序（`work_id` 不触发该排序，仍是默认序）。
 
