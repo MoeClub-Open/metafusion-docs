@@ -1,5 +1,5 @@
 # docs-site — 独立文档站，VitePress 驱动
-FROM node:24-alpine AS base
+FROM node:24.22.1-alpine AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -14,7 +14,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
-FROM node:24-alpine AS runner
+FROM node:24.22.1-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
