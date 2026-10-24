@@ -225,10 +225,13 @@ POST /api/catalog/expressions/details
 | `GET /api/catalog/entities/{id}/quality` | 单条只读诊断；可见性与实体详情相同 |
 | `POST /api/catalog/quality/batch` | `{"ids":["<UUID>"]}`，1–100 个实体；返回 `reports[]` 和按 ID 记录的 `errors`，单项失败不代表全批失败 |
 | `GET /api/catalog/entities/stats` | 按生命周期统计条目，需要 `catalog.lifecycle.manage`；包括 deleted/merged，不能作为匿名探索页总数 |
+| `GET /api/catalog/stats` | 公开 active 实体的总量、图片与标签覆盖数，按八种 kind 分组，无需生命周期管理权限 |
 
 质量报告包含 `entity_id`、`kind`、`status`、`issues[]`、`checks[]` 和定义版本。`status` 为 `complete` / `partial` / `needs_verification`；`checks` 声明实际检查覆盖面。质量诊断可选，只提供建议，不是编辑、提交或应用的前置条件，诊断结果不会阻断这些操作；它不是人工审核结论，不会修改条目或赋予免审资格。
 
 ## 词表、标签、货架与对比
+
+`GET /api/catalog/stats` 在同一数据库快照内返回 `total`、`with_pictures`、`with_tags` 与 `kinds`。前三项分别是 active 实体总数、pictures 非空的实体数、tags 非空的实体数；`kinds` 始终包含八种实体类型，每项具有相同三项计数，空类型补 0。只需要数量或覆盖率时使用此接口；按标签的频次继续读 `/tags`，不必遍历实体列表或逐标签查询来计算 tagged-entity 总数。该接口遵守目录读取限流。
 
 | 端点 | 用途 |
 |---|---|
@@ -240,6 +243,7 @@ POST /api/catalog/expressions/details
 | `GET /api/catalog/compare?ids=a,b` | 2–6 个可见实体的字段对比；Release/Medium 附完整载体/轨目树，属性只对比 comparable 字段 |
 
 - definitions 的字段与规则说明见[动态定义与配置](/api-definitions)。
+- 主体社交账号预设包括 `bilibili_space`（数字 UID）、`weibo`（数字 UID）、`douyin`（个人页 `/user/` 后的 sec_uid）。存量实例需显式执行内容 seed 才能新增预设，使用前先读取实例注册表；不要把个人空间写成 `official_website`。
 - `tags` 支持 `q` 过滤，`limit` 默认 200 上限 500
 - `shelves/feed` 的 `per_shelf` 默认 12、上限 100；登录用户按其首页偏好合并、重排与隐藏，每条 `shelf` 带 `source`（`system` / `custom`）
 - compare 需要 2–6 个实体，越界返回 `compare_requires_two_to_six`。每项使用 `entity`；Release/Medium 的载体树在 `children` 中，每项为 `{medium, tracks}`。

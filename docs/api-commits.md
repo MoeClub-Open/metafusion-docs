@@ -44,6 +44,8 @@ group: "api"
 
 副本 `state` 为 `active` 或 `archived`，所有者可归档或恢复。列表默认 `limit=20`、最大 100，`offset` 从 0 起。
 
+创建和每次 checkout 的 `entity_ids`、`relation_ids` 合计最多 100 个，超出返回 `400 invalid_checkout_size`。可多次 checkout；每次使用上次返回的 version。JSON 请求体最多 2 MiB。
+
 ### 暂存修改
 
 `operations` 支持实体与关系；每项字段为 `target`、`action`、`id`、`ref`、`document`、`patch`、`content_change`，按操作选择适用项。
@@ -69,9 +71,13 @@ patch 使用 JSON Pointer；明确删除字段时使用 `remove:true`。省略�
 
 创建对象使用 `action:create`、`ref` 和 `document`。一次 stage 的文档内可用 `{"$ref":"<ref>"}` 引用本次新建对象；响应 `refs` 提供实际分配的稳定 UUID，后续 stage 和 commit 使用该 UUID，不重新创建。创建顺序应满足依赖，例如 Work → ContentUnit → Expression，Release → Medium → Track。每次 stage 包含 1–100 个操作，数组字段按整体值修改。
 
+每个 update 最多 200 个 patch 路径，超限返回 `400 invalid_commit_size`。多次 stage 可共用一次 commit；100 个操作是单次保存上限，不是整笔 commit 的对象上限。文档类型错误返回 `400 invalid_document`，带从 0 开始的 `operation` 与文档相对 JSON Pointer `pointer`，例如 `/pictures/0/caption`。caption 必须是语言对象（如 `{"ja-JP":"キービジュアル"}`）；source 可省略，提供时是来源对象。失败不会保存本批目录修改。
+
 关系修改使用同一入口的 `target:relation`；删除关系使用 `action:delete` 和关系 ID。Track 的收录使用 `target:entity`、`action:content` 与 `content_change`：`action` 为 `add`、`replace` 或 `delete`，`position` 指已有位置，增加或替换时携带 `inclusion`。只改本次收录，保留其他和不可见的历史收录。实体、图片、关系和收录的字段约束见[新建与编辑](/api-edit)。
 
 ### 创建 commit
+
+`message` 去除首尾空白后必须为 1–2000 个 Unicode 字符，超限返回 `400 invalid_commit_message`。
 
 ```json
 {
