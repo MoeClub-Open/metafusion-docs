@@ -55,6 +55,8 @@ GET /api/catalog/entities?q=城市光影&kind=work&sort=title&locale=zh-CN&limit
 
 索引更新有延迟，数据库在回读时再次检查当前可见性与筛选条件。因此 items 可能不足 limit，甚至为空，但 has_more 仍为 true。判断结束使用 has_more，不用「本页为空」或「本页少于 limit」。
 
+索引已完整建立后，后台同步失败不会关闭已有索引的查询。`GET /health` 的 `search_ready` 表示索引是否可查询，`search_indexing_delayed` 单独表示最近同步失败；读取仍使用索引快照及数据库可见性复核。首次建立索引尚未完成或查询服务本身不可用时，关键词检索仍返回 `503 search_unavailable`。磁盘触发索引只读保护时，先释放空间再恢复写入，不通过放宽磁盘保护阈值掩盖问题。
+
 无关键词浏览的响应使用 `total_relation="eq"`，total 是数据库计数，并带 has_more。修改后要确认当前实体内容，直接回读详情；搜索无命中不能证明实体不存在。
 
 ## 首页与深分页

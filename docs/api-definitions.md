@@ -31,6 +31,14 @@ group: "api"
 
 组字段与列表支持嵌套结构。单条记录使用 `group`，重复记录使用 `list`；可选组可以整体省略，提供组对象后才校验组内必填字段，不必仅为可选性额外套一层列表。列表筛选需叶子字段 `searchable=true` 且沿途字段启用，查询例子见[实体查询与详情](/api-entities)。
 
+日期默认接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`。日期字段可设置 `allow_yearless:true`，额外接受 `--MM-DD`，例如 `--02-29`；未知年份不补造年份。此表示沿用 [W3C gMonthDay](https://www.w3.org/TR/xmlschema-2/#gMonthDay) 的月日格式，只在明确启用的字段生效。
+
+主体资料种子提供 `birth_date`（允许仅月日）、`death_date`、`formation_date`、`dissolution_date`、`occupations`（原语言职业字符串列表）和 `activity_periods`（`[{begin?,end?}]` 日期区间列表）。出生与逝世描述个人，成立与解散描述组织，活动期可有多段；具体作品中的职责仍走署名关系。它们均可省略，不作为保存门槛。
+
+开放标签的音乐建议词补充了 pop、j_pop、jazz、hip_hop、electronic、alternative、rnb、children_music、spoken_word、asmr 等；分类参考 [MusicBrainz 流派表](https://musicbrainz.org/genres)，具体归类仍需核对来源，不能由题名猜测。标签继续接受词表外字符串，既有 jpop 等值不自动改写。
+
+存量实例须显式执行内容 `seed` 才能补齐新字段、模板和词项；已有名称、停用状态与自定义词项保留，新增词项不会使已停用项重新启用。
+
 `locator`、`subject_attributes` 和 `inclusion_attributes` 使用组字段与 schemes：
 
 - 按拥有者 kind 匹配同槽位方案；Track 可进一步按 Medium.format 匹配 `medium_formats`。
