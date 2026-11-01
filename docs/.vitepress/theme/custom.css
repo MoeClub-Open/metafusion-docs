@@ -1,9 +1,9 @@
+@import './shared/theme.generated.css';
+@import './shared/theme.tokens.css';
+
 /* 中文正文排版：CJK 字体栈 + 更松的行距与列表间距 */
 :root {
-  --vp-font-family-base:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
-    'Noto Sans SC', sans-serif;
+  --vp-font-family-base: var(--font-sans);
 }
 
 .vp-doc p {
@@ -34,3 +34,24 @@
 .vp-doc :not(pre) > code {
   margin: 0 2px;
 }
+
+:root, .dark {
+  --vp-c-bg: var(--bg-color);
+  --vp-c-bg-alt: var(--surface-color);
+  --vp-c-bg-soft: var(--surface-subtle-color);
+  --vp-c-bg-elv: var(--surface-color);
+  --vp-c-text-1: var(--text-strong-color);
+  --vp-c-text-2: var(--text-body-color);
+  --vp-c-text-3: var(--text-muted-color);
+  --vp-c-divider: var(--line-color);
+  --vp-c-border: var(--line-color);
+  --vp-c-gutter: var(--line-subtle-color);
+  --vp-c-brand-1: var(--primary-color);
+  --vp-c-brand-2: var(--primary-hover-color);
+  --vp-c-brand-3: var(--primary-color);
+  --vp-c-brand-soft: rgb(var(--primary-rgb) / 12%);
+  --vp-button-brand-text: var(--primary-contrast-color);
+  --vp-button-brand-hover-text: var(--primary-contrast-color);
+  --vp-button-brand-active-text: var(--primary-contrast-color);
+}
+.VPButton, .VPNavBarSearch .DocSearch-Button, .VPNavBarSearch .VPNavBarSearchButton { border-radius: var(--radius-control); }

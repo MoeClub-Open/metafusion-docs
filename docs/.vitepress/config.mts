@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pageRedirects } from './redirects.mjs';
+import { themeBootScript } from './theme/shared/boot.generated';
 
 // 导航与侧栏的事实来源是每页 frontmatter 的 group / order / title：
 // 页面属于哪个分区、排在第几、显示什么名字，都只写在页面里；本文件只声明
@@ -92,6 +93,8 @@ export default defineConfig({
   title: 'MetaFusion 平台文档',
   description: 'MetaFusion 使用指南、编目规范与 API 参考',
   lang: 'zh-CN',
+  appearance: { initialValue: 'dark' },
+  head: [['script', {}, themeBootScript]],
   lastUpdated: false,
   cleanUrls: true,
 
