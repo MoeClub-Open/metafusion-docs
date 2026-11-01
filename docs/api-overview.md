@@ -36,9 +36,17 @@ MetaFusion 使用统一的 `/api` 入口。实体种类通过 `kind` 区分，�
 
 交互文档 `/api/docs` 与 `/api/swagger` 需要登录及 `catalog.lifecycle.manage`，第三方接入直接使用公开 OpenAPI。
 
-## 本人的 API 请求日志
+## 操作审计与 API 统计
 
-`GET /api/catalog/developer/request-logs` 需要登录，只返回调用者本人的记录，响应为 `{"items":[...]}`。可用 `credential` 按凭据名称精确筛选，同名 Key 会归为一组；`limit` 默认 50，HTTP 接口接受 1–100，非法分页参数返回 400。每条记录包含时间、凭据类型/名称、HTTP 方法、路由、状态与耗时，不含令牌或请求正文；读取日志本身不会产生一条新日志。
+API 不保存逐次请求日志。写入及账号安全操作保留操作审计；目录、账号、社区和存储的流量按 UTC 日期、服务、路由模板和状态码汇总，约 30 秒更新一次，不包含用户、IP、请求正文或令牌。统计供运维参考，异常退出可能损失最后一个刷新周期。旧目录统计只覆盖迁移前的已登录请求，其他服务无历史回填。
+
+账号后台「日志与统计」可筛选操作记录、查看调用量及耗时；`auth.audit.read` 可查看全站，普通账号只能通过自己的操作记录页查看本人审计。拥有独立的 `auth.audit.manage` 权限后，可预览并确认清理指定服务在某个 UTC 日期之前的审计或日统计。清理不可恢复，保留当天数据，清理动作本身留痕；目录版本历史与 OAuth 事务记录不参与清理。
+
+| 端点 | 参数与响应 |
+| --- | --- |
+| `GET /api/admin/api-statistics` | `from`、`to` 为 UTC 日期（默认近 7 天，最多 90 天），`service` 可选；需 `auth.audit.read`。返回 `items` 与 `flush_interval_seconds:30`；每项为 `day/service/method/route/status/requests/total_ms/max_ms`。 |
+| `GET /api/admin/log-cleanup` | 必填 `kind=audit|statistics`、`before=YYYY-MM-DD`，可选 `service`；需 `auth.audit.manage`，返回 `count`。 |
+| `POST /api/admin/log-cleanup` | JSON 接受同样的 `kind/before/service`，返回实际 `removed` 数量；截止日期不能晚于今天（UTC）。 |
 
 ## 能力索引
 

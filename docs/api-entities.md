@@ -255,7 +255,6 @@ POST /api/catalog/expressions/details
 | 端点 | 查询参数与用途 |
 | --- | --- |
 | `GET /api/admin/catalog-entities` | 全量条目台账；`state=active|deleted|merged`、`kind`、`q`，不传 state 包含全部生命周期 |
-| `GET /api/admin/catalog-request-logs` | 跨用户目录 API 日志；`user_id`、凭据显示名 `credential`、HTTP `status`、路由子串 `path` |
 
 两者使用 PostgreSQL 计数与稳定排序，不依赖搜索索引；支持 `limit`（默认 50、范围 1–100）与 `offset`，返回 `items/total/limit/offset/has_more`。条目 q 按原名、翻译名或 UUID 做不区分大小写的字面子串匹配。公共条目列表仍排除 deleted/merged，不能用其代替后台台账。
 
