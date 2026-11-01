@@ -133,6 +133,7 @@ detail 最多 2000 字符，evidence_url 为 HTTP(S) 绝对地址、最多 500 �
 | 操作 | 端点 | 权限 |
 | --- | --- | --- |
 | 置顶 | `PUT /api/community/topics/:id/pin`，`{pinned:boolean}` | community.topic.pin |
+| 新建板块 | `POST /api/community/boards` | community.board.manage |
 | 板块设置 | `PUT /api/community/boards/:code` | community.board.manage |
 | 回复巡检 | `GET /api/community/posts` | community.post.moderate |
 | 举报队列与详情 | `GET /api/community/admin/reports`、`/:id` | community.report.review |
@@ -160,3 +161,9 @@ content_removed 要求先通过既有删除端点移除本地内容；仍存在�
 `GET /api/community/admin/favorites` 支持 `page/page_size` 和可选 `owner_id/target_type/target_id`，三个筛选按精确条件共同匹配。响应 `{items,total}`，每项为 `{owner_id,target_type,target_id,created_at}`。这是本地收藏原始记录台账，不依赖目录解析或目标当前可见性，因此能处置已删除或合并目标留下的记录；公开收藏接口继续按访问者的可见性过滤。
 
 `DELETE /api/community/admin/favorites?owner_id=<UUID>&target_type=<kind>&target_id=<UUID>` 要求三个键齐全，按复合身份精确删除，成功返回 204，不存在返回 404，并记录管理审计。`target_type` 为八种实体 kind；本接口不通过当前管理员的收藏切换操作代替删除他人记录。
+
+### 新建板块
+
+管理员通过社区后台「板块管理」创建板块，或调用 `POST /api/community/boards`。`code` 为1–64位小写字母、数字、短横线或下划线，首位是字母或数字；创建后不可修改。`names` 需要 `zh-CN`、`zh-TW`、`en-US`、`ja-JP` 四语非空值；`descriptions` 可省略，提供时沿用四语配置规则。颜色、图标、排序、`is_enabled` 和 `show_in_feed` 可同时指定，默认 emerald、BookOpen、0、true、true。
+
+成功返回201和完整板块对象；重复代码返回409 `board_exists`，代码格式错误返回400 `invalid_board_code`，缺少权限返回403。创建登记 `board.created` 操作审计。停用板块保留已有主题归属，不需要删除板块。
