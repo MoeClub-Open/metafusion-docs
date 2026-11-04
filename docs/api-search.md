@@ -15,6 +15,8 @@ group: "api"
 
 q 可以和当前列表过滤组合：kind / kinds、state、tags（通过 tags_mode 选择任一或全部匹配）、original_language、has_pictures、固定归属 ID，以及 field + value 的精确属性筛选。嵌套组、列表和收录伪字段按 definitions 的搜索声明校验。完整参数见[实体查询与详情](/api-entities)。
 
+检索作品、发行、主体或合集等顶层对象时，建议附带 `kinds=work,release,agent,collection`，避免同名的曲目 `track`、载体 `medium`、分集 `content_unit` 或 `expression` 占据首屏结果；需要定位具体曲目或篇目时再指定相应 `kind` 或归属 ID。若已拿到一组确定 UUID，直接使用无 `q` 的 `GET /api/catalog/entities?ids=...`（保持传入顺序）或 `POST /api/catalog/entities/batch` 一次读取完整详情。
+
 q 等文本参数最多 256 字节，须为合法 UTF-8；除制表符外的控制字符会被拒绝。客户端应使用 URL 编码，不手工拼接关键词。
 
 ```http

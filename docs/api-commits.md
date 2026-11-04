@@ -27,18 +27,18 @@ group: "api"
 
 | 方法与路径 | 请求体 | 返回 |
 | --- | --- | --- |
-| `POST /workspaces` | `{id?, name, entity_ids?, relation_ids?}` | `Workspace` |
-| `GET /workspaces` | `limit` / `offset` 查询参数 | `{items,total,limit,offset}` |
-| `GET /workspaces/:id` | 无 | `Workspace` |
-| `PATCH /workspaces/:id` | `{expected_version, name?, state?}` | `Workspace` |
-| `POST /workspaces/:id/checkout` | `{expected_version, entity_ids?, relation_ids?}` | `Workspace` |
-| `PUT /workspaces/:id/changes` | `{expected_version, operations}` | `{workspace, refs}` |
-| `PUT /workspaces/:id/members` | `{expected_version, user_ids}` | `Workspace` |
-| `POST /workspaces/:id/commits` | `{id, expected_version, message}` | `CollaborationCommit` |
-| `GET /workspaces/:id/commits` | `limit` / `offset` / `target` / `record_id` / `author_id` / `since` / `until` / `state` | `{items,total,limit,offset}`，新到旧 |
-| `POST /workspaces/:id/push` | `{expected_version, expected_head, title?}` | `WorkspacePushResult` |
-| `POST /workspaces/:id/rebase` | `{id, expected_version, expected_head, onto_commit_id?, order?, message?, resolutions?}` | `{workspace, commit}` |
-| `GET /commits/:id` | 无 | `CollaborationCommit` |
+| `POST /api/catalog/workspaces` | `{id?, name, entity_ids?, relation_ids?}` | `Workspace` |
+| `GET /api/catalog/workspaces` | `limit` / `offset` 查询参数 | `{items,total,limit,offset}` |
+| `GET /api/catalog/workspaces/:id` | 无 | `Workspace` |
+| `PATCH /api/catalog/workspaces/:id` | `{expected_version, name?, state?}` | `Workspace` |
+| `POST /api/catalog/workspaces/:id/checkout` | `{expected_version, entity_ids?, relation_ids?}` | `Workspace` |
+| `PUT /api/catalog/workspaces/:id/changes` | `{expected_version, operations}` | `{workspace, refs}` |
+| `PUT /api/catalog/workspaces/:id/members` | `{expected_version, user_ids}` | `Workspace` |
+| `POST /api/catalog/workspaces/:id/commits` | `{id, expected_version, message}` | `CollaborationCommit` |
+| `GET /api/catalog/workspaces/:id/commits` | `limit` / `offset` / `target` / `record_id` / `author_id` / `since` / `until` / `state` | `{items,total,limit,offset}`，新到旧 |
+| `POST /api/catalog/workspaces/:id/push` | `{expected_version, expected_head, title?}` | `WorkspacePushResult` |
+| `POST /api/catalog/workspaces/:id/rebase` | `{id, expected_version, expected_head, onto_commit_id?, order?, message?, resolutions?}` | `{workspace, commit}` |
+| `GET /api/catalog/commits/:id` | 无 | `CollaborationCommit` |
 
 `Workspace` 包含 `id`、`owner_id`、`name`、`version`、`head_commit_id`、`base_commit_id`、`pending_commits`、`state`、`members`、`objects`、`dirty_count`、`created_at` 与 `updated_at`。每个 object 有 `target`、`id`、`base_version`、`base`、`committed`、`document`、`dirty`，分别保留正式基线、最近已提交状态和当前编辑状态。提交或推送前先回读副本，不从浏览器旧缓存猜测版本。
 
@@ -146,12 +146,12 @@ PR 状态为 `open`、`merged`、`closed`；closed 可重新打开。合并需�
 
 | 方法与路径 | 作用 |
 | --- | --- |
-| `POST /workspaces/fork` | `{id,name,commit_id,entity_ids?,relation_ids?}`，从冻结提交派生独立副本 |
-| `POST /workspaces/:id/version` | `{id,expected_version,expected_head,operation,commit_ids?,message?,mode?,resolutions?}` |
-| `GET /workspaces/:id/status` | 未提交/待合入数量、可合并性及三方冲突 |
-| `GET /workspaces/:id/events` | 不可变操作历史，保留旧/新 head、操作人和请求 ID |
-| `GET/POST /workspaces/:id/tags` | 私有标签列表；创建、改名、移动或删除 |
-| `GET/POST /workspaces/:id/stashes` | 搁置列表；save/apply/pop/drop |
+| `POST /api/catalog/workspaces/fork` | `{id,name,commit_id,entity_ids?,relation_ids?}`，从冻结提交派生独立副本 |
+| `POST /api/catalog/workspaces/:id/version` | `{id,expected_version,expected_head,operation,commit_ids?,message?,mode?,resolutions?}` |
+| `GET /api/catalog/workspaces/:id/status` | 未提交/待合入数量、可合并性及三方冲突 |
+| `GET /api/catalog/workspaces/:id/events` | 不可变操作历史，保留旧/新 head、操作人和请求 ID |
+| `GET/POST /api/catalog/workspaces/:id/tags` | 私有标签列表；创建、改名、移动或删除 |
+| `GET/POST /api/catalog/workspaces/:id/stashes` | 搁置列表；save/apply/pop/drop |
 
 `operation` 支持：
 
@@ -172,11 +172,11 @@ amend/squash/reset 由副本所有者执行，不能改写已合入历史；其�
 
 | 接口 | 返回 |
 | --- | --- |
-| `GET /head` | `{commit_id,sequence}`，正式目录事务 head |
-| `GET /history` | `{items,total,limit,offset}`，正式合入检查点，新到旧 |
-| `GET /commits/:id/snapshot` | `{commit_id,scope,objects,total,limit,offset}` |
-| `GET /commits/:id/compare?base=UUID` | `{base_id,head_id,changes,total,limit,offset}` |
-| `GET /commits/:id/blame?target=entity&record_id=UUID&pointer=/title` | 保留提交图中最近修改该字段的可读编辑提交 |
+| `GET /api/catalog/head` | `{commit_id,sequence}`，正式目录事务 head |
+| `GET /api/catalog/history` | `{items,total,limit,offset}`，正式合入检查点，新到旧 |
+| `GET /api/catalog/commits/:id/snapshot` | `{commit_id,scope,objects,total,limit,offset}` |
+| `GET /api/catalog/commits/:id/compare?base=UUID` | `{base_id,head_id,changes,total,limit,offset}` |
+| `GET /api/catalog/commits/:id/blame?target=entity&record_id=UUID&pointer=/title` | 保留提交图中最近修改该字段的可读编辑提交 |
 
 列表、历史、快照和对比默认 `limit=20`，最大100，使用 `offset` 或互斥的 `page` 翻页。`blame` 提供字段级归属，不是逐字符作者统计。
 
@@ -184,10 +184,10 @@ amend/squash/reset 由副本所有者执行，不能改写已合入历史；其�
 
 | 接口 | 用途与响应 |
 | --- | --- |
-| `GET /workspaces/:id/diff?basis=head` | 工作内容相对最近提交的差异；`basis=base` 比较 checkout 基线。响应含 `workspace_id,version,head_id,basis,changes,total,limit,offset`，仅成员可读 |
-| `GET /commits/:id/diff` | 某一不可变提交原本记录的修改，响应含 `commit_id,parent_id,changes,total,limit,offset` |
-| `GET /pull-requests/:id/diff` | 当前 PR 版本冻结的净差异，响应含 `pull_request_id,version,source_head_id,source_base_id,changes,total,limit,offset` |
-| `GET /pull-requests/:id/commits` | PR 冻结提交集合，新到旧，响应含同一组 PR 版本字段及 `items,total,limit,offset` |
+| `GET /api/catalog/workspaces/:id/diff?basis=head` | 工作内容相对最近提交的差异；`basis=base` 比较 checkout 基线。响应含 `workspace_id,version,head_id,basis,changes,total,limit,offset`，仅成员可读 |
+| `GET /api/catalog/commits/:id/diff` | 某一不可变提交原本记录的修改，响应含 `commit_id,parent_id,changes,total,limit,offset` |
+| `GET /api/catalog/pull-requests/:id/diff` | 当前 PR 版本冻结的净差异，响应含 `pull_request_id,version,source_head_id,source_base_id,changes,total,limit,offset` |
+| `GET /api/catalog/pull-requests/:id/commits` | PR 冻结提交集合，新到旧，响应含同一组 PR 版本字段及 `items,total,limit,offset` |
 
 以上差异接口以及 snapshot、compare 支持 `target=entity|relation`、`record_id=UUID`；这两个参数也可筛选正式 history、分支 commits、PR commits 中修改过相应记录的提交。所有筛选在计数和分页前执行，不扩大可见范围。`diff` 是原始提交修改或工作/提案净差异；`compare` 比较两个冻结记录集合。
 

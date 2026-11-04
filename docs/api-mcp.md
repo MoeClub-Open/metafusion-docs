@@ -46,7 +46,11 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 | metafusion_api_call | 调用现有公共 API：搜索、创建与编辑实体、关系、定义、只读外部来源查询、通知、互动、存储和已授权的管理操作；支持 JSON、查询参数、base64 与 multipart |
 | metafusion_api_contract | 当前目录 OpenAPI 与具体操作模式 |
 | metafusion_reference | 云端读取版本锁定的技能或其他子系统 API 手册 |
-| metafusion_search / relationships / candidates | 常用查询与候选核查 |
+| metafusion_search / metafusion_entities_batch | 关键词与多维检索（顶层检索可传 `kinds=work,release,agent,collection`）；按 1–100 个 UUID 单次快照批量读取完整实体、`covers` 与 `missing` |
+| metafusion_relationships / catalog_graph_read | 单跳关系分页与 1–3 跳自动翻页合并图谱；均支持 `classes`、`direction`、`rule_codes`、`peer_kinds` 裁剪 |
+| metafusion_candidates / catalog_identity_check | 单条或 1–50 条批量身份查重；可选 `context` 输出置信度与 `reuse` / `review` / `distinct` 建议，不过滤同名候选 |
+| catalog_quality_audit | 1–100 个实体按需即时质量诊断，不保存、不阻塞编辑与合入 |
+| external_source_query | 只读查询 Bangumi、DLsite、DMM 原始数据与映射预览，不自动写库 |
 | metafusion_workspace_create / list / get / edit / checkout / members | 创建和维护服务器副本，加入记录与协作者 |
 | metafusion_workspace_stage / commit / commits / push / rebase | 多次暂存、不可变提交、推送与三方冲突解决 |
 | metafusion_pull_request_create / list / get / edit / merge | 创建、审阅和合并 PR |

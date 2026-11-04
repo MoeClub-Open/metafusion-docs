@@ -24,6 +24,7 @@ GET /api/catalog/entities?kind=medium&release_id=<release_id>
 
 | 参数 | 说明 |
 |---|---|
+| `id` / `ids` | 按单个 UUID（`id`）或 1–100 个 UUID（`ids`，逗号分隔或重复传参）精确筛选；无 `q` 且未显式指定 `sort` 时 `ids` 按传入顺序返回 |
 | `kind` | 单个 kind 过滤 |
 | `kinds` | 多值 kind（重复出现或逗号分隔，命中任一即返回） |
 | `state` | 生命周期过滤 active / deleted / merged；普通列表排除 deleted / merged，可见性另见[API 概览](/api-overview) |
@@ -99,13 +100,21 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
   "titles": ["夜明け", "Dawn"],
   "external_links": [{"kind": "wikidata", "value": "Q123"}],
   "attributes": [{"key": "duration", "value": "213"}],
+  "context": {
+    "creator": ["<agent_uuid>"],
+    "performer": ["<agent_uuid>"],
+    "label": ["<agent_uuid>"],
+    "catalog_number": ["VICL-65001"]
+  },
   "limit": 1000
 }
 ```
 
 `kind` 必填，至少提供一类条件，每类最多 20 项、每个值最多 256 字节。条件之间为 OR：题名匹配基础题名、翻译题名及别名，忽略大小写并合并空白；外部 ID 和标量/标量数组属性按文本精确比较。Expression/ContentUnit 可用 `work_id` 限定所属 Work，Medium 可用 `release_id` 限定 Release，Track 可用 `medium_id` 限定 Medium。相同题名、时长或版次属性只能定位候选，不能确认身份。
 
-响应包含 `items`、`total`、`complete`、`basis="postgres_repeatable_read"`。每项含 `matched` 原始实体摘要和 `canonical` 保留实体摘要；不能解析时 `canonical=null` 并带 `resolution_error`。摘要不能当作完整的副本编辑文档。
+可选 `context`（`creator`、`performer`、`label` 为主体 UUID 数组，`catalog_number` 为品番字符串数组，每项最多 20 个）仅用于计算置信度与排序，**从不缩减候选集**——同名但不同作者或厂牌的实体仍会返回。每条命中附带参考评估 `assessment: {matched_fields, conflicts?, context_summary?, confidence, recommended_action}`，`recommended_action` 取 `reuse` / `review` / `distinct`，仅供辅助判断，服务端不会自动合并。
+
+响应包含 `items`、`total`、`complete`、`basis="postgres_repeatable_read"`。每项含 `matched` 原始实体摘要、`canonical` 保留实体摘要及 `assessment`；不能解析时 `canonical=null` 并带 `resolution_error`。摘要不能当作完整的副本编辑文档。
 
 `total` 是该快照中命中的原始实体数；`limit` 为 1–1000，默认 1000。超过上限时 `complete=false`，应收窄过宽条件，不能把部分结果当成没有重复。查询仅覆盖调用者可见范围，排除已删除原始实体；零候选不证明不可见范围内没有重复。候选查询与其他目录请求共用每账号或匿名客户端 IP 每分钟 180 次的默认预算，见[限流](/api-overview#限流)。
 
@@ -115,6 +124,7 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 
 ```http
 GET /api/catalog/entities/:id            # 通用实体详情（含 version，写入时要用）
+POST /api/catalog/entities/batch         # 一次快照批量读取 1–100 个完整实体、covers 与 missing
 GET /api/catalog/entities/:id/resolve    # 合并后跟随 redirect_id 取到保留实体
 GET /api/catalog/entities/:id/identity   # 存活实体与完整历史别名
 GET /api/catalog/entities/:id/links      # 结构、语义关系与字段引用，含两端实体表
@@ -131,13 +141,15 @@ GET /api/catalog/entities/:id/revisions  # 修订历史
 
 实体详情包含当前 version，但不是全库事实的无损导出。Track 的 contents 会过滤当前不可见的 Expression；编辑时不要把可见性裁剪后的结果整份覆盖，以免误删历史引用。维护单条收录使用[工作副本的 content 操作](/api-edit#编辑实体与收录)。
 
+已知多条 UUID 需要获取完整结构字段时，使用 `POST /api/catalog/entities/batch`，请求体为 `{"ids":["<uuid>", ...]}`（1–100 个 UUID，超限返回 `400 too_many_ids`，空数组返回 `400 ids_required`）。服务在同一个 repeatable-read 只读事务内返回按 ID 索引的完整实体 `items`（含结构归属、`subjects` 与当前可见 `contents`）、显示封面 `covers` 以及不存在或不可见的 `missing` 数组，避免逐条串行请求。
+
 ### 身份解析和统一关系读取
 
 `GET /api/catalog/entities/:id/identity` 返回 `{canonical_id, aliases, entity, complete}`。aliases 包含反向合并分支和多跳链；只有 `complete=true` 才能当作全集用于评论、收藏或文件聚合。终点不存在/不可见返回 404，查询失败返回错误，不把部分结果伪装成完整身份。
 
 `POST /api/catalog/entities/identity` 是只读批量解析，请求 `{ids:[...]}`，1–500 项，返回按请求 ID 索引的 `items` 与 `missing`。不可见/不存在进入 missing，数据库故障使整批失败。
 
-`GET /api/catalog/entities/:id/links?limit=50&offset=0` 返回 `{subject_id, definition_etag, items, entities, limit, offset, has_more}`。每项有 key、rule_code、class、direction、两端 ID、排序及可选角色、定位和属性。普通语义关系的 key 是关系 ID，version 是当前编辑版本；结构与字段引用没有独立可写版本，仍修改其权威字段。
+`GET /api/catalog/entities/:id/links?limit=50&offset=0` 返回 `{subject_id, definition_etag, items, entities, limit, offset, has_more}`，支持可选筛选查询参数 `direction`（`both` / `outgoing` / `incoming`）、`classes`（`ownership` / `placement` / `inclusion` / `semantic` / `reference`，逗号分隔或重复传参）、`rule_codes` 与 `peer_kinds`。指定 `classes` 时服务端直接跳过无关的关系表扫描（例如详情页只读语义关系与字段引用时传 `classes=semantic,reference`）。每项有 key、rule_code、class、direction、两端 ID、排序及可选角色、定位和属性。普通语义关系的 key 是关系 ID，version 是当前编辑版本；结构与字段引用没有独立可写版本，仍修改其权威字段。
 
 规则从 `definitions.relationship_rules` 发现，覆盖以下事实：
 
@@ -162,6 +174,7 @@ Content-Type: application/json
 {
   "ids": ["<release_uuid>", "<expression_uuid>"],
   "direction": "both",
+  "classes": ["semantic", "reference"],
   "limit": 25,
   "offset": 0
 }
@@ -171,6 +184,7 @@ Content-Type: application/json
 | --- | --- |
 | `ids` | 1–20 个 UUID，去重并保留请求顺序 |
 | `direction` | both（默认）、outgoing 或 incoming，相对于每个主体 |
+| `classes` | 可选数组，按关系类别（`ownership` / `placement` / `inclusion` / `semantic` / `reference`）裁剪查询分支；多个类别命中任一 |
 | `rule_codes` | 可选数组，当前关系注册表中的完整码，例如 `structure:track_content`；多个码为命中任一 |
 | `peer_kinds` | 可选数组，八类 kind 的对端筛选；多个 kind 为命中任一 |
 | `limit` | 每个主体的页大小，默认 25，范围 1–100 |
@@ -218,7 +232,7 @@ POST /api/catalog/expressions/details
 
 ## 批量身份候选与质量检查
 
-`POST /api/catalog/entities/candidates/batch` 接受 `{"queries":[{"key":"work-a","kind":"work","titles":["题名"]}]}`，一次最多 50 个查询。每项使用前述候选查询的平铺字段，`key` 必须唯一且非空。响应为 `results[]`，保留各项 `key`、`items`、`total`、`complete` 与可能的 `error`；逐项核对，不能把失败或不完整结果当成零候选。
+`POST /api/catalog/entities/candidates/batch` 接受 `{"queries":[{"key":"work-a","kind":"work","titles":["题名"],"context":{"creator":["<agent_uuid>"]}}]}`，一次最多 50 个查询。每项使用前述候选查询的平铺字段（含可选 `context`），`key` 必须唯一且非空。响应为 `results[]`，保留各项 `key`、`items`（每条带 `assessment`）、`total`、`complete` 与可能的 `error`；逐项核对，不能把失败或不完整结果当成零候选。
 
 | 接口 | 输入与返回 |
 | --- | --- |
@@ -248,7 +262,7 @@ POST /api/catalog/expressions/details
 - `shelves/feed` 的 `per_shelf` 默认 12、上限 100；登录用户按其首页偏好合并、重排与隐藏，每条 `shelf` 带 `source`（`system` / `custom`）
 - compare 需要 2–6 个实体，越界返回 `compare_requires_two_to_six`。每项使用 `entity`；Release/Medium 的载体树在 `children` 中，每项为 `{medium, tracks}`。
 
-## 后台条目与请求台账
+## 后台条目台账
 
 以下只读端点需要 `catalog.lifecycle.manage`，第三方 OAuth 身份不可调用：
 
@@ -256,9 +270,7 @@ POST /api/catalog/expressions/details
 | --- | --- |
 | `GET /api/admin/catalog-entities` | 全量条目台账；`state=active|deleted|merged`、`kind`、`q`，不传 state 包含全部生命周期 |
 
-两者使用 PostgreSQL 计数与稳定排序，不依赖搜索索引；支持 `limit`（默认 50、范围 1–100）与 `offset`，返回 `items/total/limit/offset/has_more`。条目 q 按原名、翻译名或 UUID 做不区分大小写的字面子串匹配。公共条目列表仍排除 deleted/merged，不能用其代替后台台账。
-
-日志只记录已认证调用，保留 30 天，包含账号、凭据类型与名称、时间、方法、路由模板、响应状态和耗时；不包含令牌、请求头、正文、查询串或路由内实体 ID。本人开发者日志仍仅返回本人的记录。
+该端点使用 PostgreSQL 计数与稳定排序，不依赖搜索索引；支持 `limit`（默认 50、范围 1–100）与 `offset`，返回 `items/total/limit/offset/has_more`。`q` 按原名、翻译名或 UUID 做不区分大小写的字面子串匹配。公共条目列表仍排除 deleted/merged，不能用其代替后台台账。管理操作审计与聚合统计由账号服务独立维护，不记录逐次只读查询请求。
 
 ## 用户贡献流
 
