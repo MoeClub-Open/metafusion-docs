@@ -30,7 +30,9 @@ GET /api/catalog/entities?kind=medium&release_id=<release_id>
 | `state` | 生命周期过滤 active / deleted / merged；普通列表排除 deleted / merged，可见性另见[API 概览](/api-overview) |
 | `original_language` / `has_pictures` | 原始语言精确筛选 / `has_pictures=1` 仅返回有图实体 |
 | `q` | 关键词查询，匹配、索引计数与分页见[检索](/api-search) |
-| `field` + `value` | 按 `document` 内属性字段精确过滤（支持点分路径，见下） |
+| `field` + `value` | 按 `document` 内可检索属性字段单值精确过滤（支持点分路径，见下；与 `values` 互斥） |
+| `field` + `values` | 同字段多值 OR 过滤（重复传参或逗号分隔，须配合 `field`；与 `value` 同时提交返回 `400 invalid_query_param`） |
+| `exclude_field` + `exclude_values` | 按可检索属性字段排除命中任一指定值的条目（缺失该属性的条目保留，如 `kind=work&exclude_field=creation_form&exclude_values=song`；须成对提交，否则返回 `400 invalid_query_param`） |
 | `work_id` | 该作品下的内容单元与表达，以及声明收录它的发行版 |
 | `content_unit_id` | 该内容单元下的表达 |
 | `release_id` | 该发行版下的载体 |
@@ -46,6 +48,8 @@ GET /api/catalog/entities?kind=medium&release_id=<release_id>
 无关键词浏览响应含 `items`、数据库计数 `total`、`total_relation="eq"` 和 `has_more`。关键词查询的索引计数与深分页标记见[检索](/api-search)。
 
 浏览、关键词检索与首页 `/api/catalog/shelves/feed` 还返回按条目 ID 索引的 `covers`：无自身封面的条目可借用关联作品、发行或载体的封面，包含 `url`、来源类型 `origin` 和来源条目 `from`（ID、原题名及多语言题名）。只采用当前可见的活动来源，界面注明借用来源；自身首图优先。此字段只用于显示，不会改写条目的 `pictures`；`has_pictures=1` 仍只筛选条目自身收录的图片。
+
+`kind=release` 的读取响应（详情、列表与批量读取）还会附带只读投影 `medium_formats`（如 `{"cd": 2, "blu_ray": 1}`），统计其下活动子 `medium` 各 `attributes.format` 词项的数量；无子载体或未填格式时省略。该字段仅用于展示，写入副本时会自动剥离。
 
 无关键词浏览默认按 `updated_at DESC, id`；带 `content_unit_id` / `release_id` / `medium_id` / `parent_id` 且未显式排序时改按 `position` 升序，
 便于直接渲染分碟与曲目顺序（`work_id` 不触发该排序，仍是默认序）。
@@ -110,9 +114,9 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 }
 ```
 
-`kind` 必填，至少提供一类条件，每类最多 20 项、每个值最多 256 字节。条件之间为 OR：题名匹配基础题名、翻译题名及别名，忽略大小写并合并空白；外部 ID 和标量/标量数组属性按文本精确比较。Expression/ContentUnit 可用 `work_id` 限定所属 Work，Medium 可用 `release_id` 限定 Release，Track 可用 `medium_id` 限定 Medium。相同题名、时长或版次属性只能定位候选，不能确认身份。
+`kind` 必填，至少提供一类条件，每类最多 20 项、每个值最多 256 字节。条件之间为 OR：题名匹配基础题名、翻译题名、正式别名及 `nonofficial_aliases`，忽略大小写并合并空白；外部 ID 和标量/标量数组属性按文本精确比较。Expression/ContentUnit 可用 `work_id` 限定所属 Work，Medium 可用 `release_id` 限定 Release，Track 可用 `medium_id` 限定 Medium。相同题名、时长或版次属性只能定位候选，不能确认身份。
 
-可选 `context`（`creator`、`performer`、`label` 为主体 UUID 数组，`catalog_number` 为品番字符串数组，每项最多 20 个）仅用于计算置信度与排序，**从不缩减候选集**——同名但不同作者或厂牌的实体仍会返回。每条命中附带参考评估 `assessment: {matched_fields, conflicts?, context_summary?, confidence, recommended_action}`，`recommended_action` 取 `reuse` / `review` / `distinct`，仅供辅助判断，服务端不会自动合并。
+可选 `context`（`creator`、`performer`、`label` 为主体 UUID 数组，`catalog_number` 为品番字符串数组，每项最多 20 个）仅用于计算置信度与排序，**从不缩减候选集**——同名但不同作者或厂牌的实体仍会返回。每条命中附带参考评估 `assessment: {matched_fields, conflicts?, context_summary?, confidence, recommended_action}`，`recommended_action` 取 `reuse` / `review` / `distinct`（其中 `nonofficial` 译名与 `nonofficial_aliases` 仅计为 `alias`，不触发 `title_exact` 高置信度；查询与候选 `agent_type` 双端非空且不同会记录 `agent_type_mismatch` 冲突并建议 `distinct`），仅供辅助判断，服务端不会自动合并。
 
 响应包含 `items`、`total`、`complete`、`basis="postgres_repeatable_read"`。每项含 `matched` 原始实体摘要、`canonical` 保留实体摘要及 `assessment`；不能解析时 `canonical=null` 并带 `resolution_error`。摘要不能当作完整的副本编辑文档。
 

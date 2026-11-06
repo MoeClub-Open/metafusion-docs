@@ -59,7 +59,7 @@ commit 使用 `message` 说明本次修改。来源、查证记录和质量报�
 ```
 
 - `kind` 是 agent / collection / work / content_unit / expression / release / medium / track。
-- `translations` 按 locale 分组，每个语种含 `title`、`summary`、`body`、`aliases`。原语言题名放在对应语种行。
+- `translations` 按 locale 分组，每个语种含 `title`、可选 `nonofficial`（布尔值，仅非原始语种可标记非官方译名）、`summary`、`body`、`aliases`、`nonofficial_aliases`。原语言题名放在对应语种行。
 - `summary` 是简短纯文本简介；可选 `body` 为 Markdown 正文，省略或空串表示没有正文。每语种最多 100000 个 Unicode 字符，超长返回 `article_too_long`，含 NUL 返回 `invalid_article_body`。
 - `attributes` 的键必须在当前 definitions 中声明，适用种类由 `applicable_kinds` 决定。不能自行添加 `cover_aspect` 等未定义键。
 - `external_links[].kind` 须为已登记的外部权威库；`url` 必填，`role` 可省略。

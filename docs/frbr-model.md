@@ -32,10 +32,11 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | `version` / `state` | 乐观锁版本与生命周期（active / deleted / merged） |
 | `review_status` | 已生效条目只读审核标记 reviewed；待合并状态属于 PR |
 | `title` / `original_language` | 基础题名与原始语言 |
-| `translations` | 按语言标签分组的对象，各项含 `title`、简短纯文本 `summary`、Markdown 条目正文 `body`、`aliases`；正文与实体共同修订 |
+| `translations` | 按语言标签分组的对象，各项含 `title`、可选 `nonofficial`（仅非原始语种可标记非官方译名）、简短纯文本 `summary`、Markdown 条目正文 `body`、`aliases` 与 `nonofficial_aliases`；正文与实体共同修订 |
 | `attributes` | 动态属性，允许键及适用种类由 definitions 决定 |
 | `external_links` | 外部权威链接数组（kind/url/可选 external_id 与 role） |
 | `pictures` | 有序图片引用及来源；首项为封面，时间信息不改变顺序 |
+| `medium_formats` | 仅 `release` 读取响应附带的只读投影，按活动子 `medium` 聚合各 `format` 词条数量，不落库 |
 | `created_by` / `created_at` / `updated_at` | 创建者与时间 |
 | `redirect_id` | 合并后的目标，由生命周期操作维护 |
 

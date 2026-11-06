@@ -11,9 +11,9 @@ group: "api"
 
 ## 匹配与筛选
 
-搜索覆盖基础题名、译名、别名、摘要、各语言的条目正文、标签和外部编号，支持词项前缀与大小写不敏感的子串匹配。默认按相关度排序，题名匹配权重较高；可以显式指定 updated_at、created_at 或 title 排序。
+搜索覆盖基础题名、官方与非官方译名、正式别名与非官方别名、摘要、各语言的条目正文、标签和外部编号，支持词项前缀与大小写不敏感的子串匹配。默认按相关度排序，题名匹配权重较高；可以显式指定 updated_at、created_at 或 title 排序（题名排序优先取官方译名与基础原名）。
 
-q 可以和当前列表过滤组合：kind / kinds、state、tags（通过 tags_mode 选择任一或全部匹配）、original_language、has_pictures、固定归属 ID，以及 field + value 的精确属性筛选。嵌套组、列表和收录伪字段按 definitions 的搜索声明校验。完整参数见[实体查询与详情](/api-entities)。
+q 可以和当前列表过滤组合：kind / kinds、state、tags（通过 tags_mode 选择任一或全部匹配）、original_language、has_pictures、固定归属 ID，以及 `field` + `value` / `values` 属性筛选与 `exclude_field` + `exclude_values` 属性排除筛选。嵌套组、列表和收录伪字段按 definitions 的搜索声明校验。完整参数见[实体查询与详情](/api-entities)。
 
 检索作品、发行、主体或合集等顶层对象时，建议附带 `kinds=work,release,agent,collection`，避免同名的曲目 `track`、载体 `medium`、分集 `content_unit` 或 `expression` 占据首屏结果；需要定位具体曲目或篇目时再指定相应 `kind` 或归属 ID。若已拿到一组确定 UUID，直接使用无 `q` 的 `GET /api/catalog/entities?ids=...`（保持传入顺序）或 `POST /api/catalog/entities/batch` 一次读取完整详情。
 

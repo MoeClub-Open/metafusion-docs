@@ -33,7 +33,7 @@ group: "api"
 
 日期默认接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`。日期字段可设置 `allow_yearless:true`，额外接受 `--MM-DD`，例如 `--02-29`；未知年份不补造年份。此表示沿用 [W3C gMonthDay](https://www.w3.org/TR/xmlschema-2/#gMonthDay) 的月日格式，只在明确启用的字段生效。
 
-主体资料种子提供 `birth_date`（允许仅月日）、`death_date`、`formation_date`、`dissolution_date`、`occupations`（原语言职业字符串列表）和 `activity_periods`（`[{begin?,end?}]` 日期区间列表）。出生与逝世描述个人，成立与解散描述组织，活动期可有多段；具体作品中的职责仍走署名关系。它们均可省略，不作为保存门槛。
+主体资料种子提供受控词表字段 `agent_type`（词项：`person`、`group`、`organization`、`character`，驱动 `agent_person` / `agent_group` / `agent_organization` / `agent_character` 细分模板与列表分面）以及 `birth_date`（允许仅月日）、`death_date`、`formation_date`、`dissolution_date`、`occupations`（原语言职业字符串列表）和 `activity_periods`（`[{begin?,end?}]` 日期区间列表）。出生与逝世描述个人，成立与解散描述组织，活动期可有多段；具体作品中的职责仍走署名关系。它们均可省略，不作为保存门槛。
 
 开放标签的音乐建议词补充了 pop、j_pop、jazz、hip_hop、electronic、alternative、rnb、children_music、spoken_word、asmr 等；分类参考 [MusicBrainz 流派表](https://musicbrainz.org/genres)，具体归类仍需核对来源，不能由题名猜测。标签继续接受词表外字符串，既有 jpop 等值不自动改写。
 
@@ -94,7 +94,7 @@ group: "api"
 | `GET /api/admin/external-databases`、`POST /api/admin/external-databases` | 列出或创建外部库，需要 `catalog.definitions.manage` |
 | `PUT /api/admin/external-databases/{code}`、`DELETE /api/admin/external-databases/{code}` | 替换或删除指定外部库，需要 `catalog.definitions.manage`；字段按 OpenAPI 的 `ExternalDatabase` 与四语名称约束填写 |
 
-货架 query 支持 tags / fields / vocab_terms / relations：条件间 AND，同数组内 OR。空 query 收录全部 active Work。sort 为 `updated`、`created` 或 `title`；名称需四语。
+货架 query 支持 tags / fields / vocab_terms / relations：条件间 AND，同数组内 OR（内置音乐、动画、影视、小说、游戏等系统货架默认按 `vocab_terms.creation_form` 求值）。空 query 收录全部 active Work。sort 为 `updated`、`created` 或 `title`；名称需四语。
 
 权威库登记决定编号与外链是否可用，不自动产生查询适配器。实际可查询来源由 `GET /api/external-sources` 提供，见[新建与编辑](/api-edit)。
 
