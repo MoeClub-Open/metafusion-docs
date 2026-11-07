@@ -53,6 +53,7 @@ group: "api"
   "context_window": 65536,
   "max_output_tokens": 4096,
   "max_tokens_parameter": "max_tokens",
+  "reasoning_effort": "medium",
   "enabled": true
 }
 ```
@@ -72,6 +73,8 @@ group: "api"
 
 用量统一为 `input_tokens/output_tokens/cached_input_tokens`：Anthropic 输入包括普通输入、缓存读取和缓存创建；Gemini 输出包括候选输出与思考 token；Responses 使用其 input/output 及缓存输入字段。缺失 usage 不视为免费成功，沿用既有不重复调用与估算结算规则。
 
+平台模型、自备模型、会话、单次聊天请求、自主任务及自动维护均支持可选 `reasoning_effort`（思考强度），可选值为 `""`（跟随模型默认）、`"none"`、`"minimal"`、`"low"`、`"medium"`、`"high"`、`"xhigh"`：`openai_compatible` 映射为顶层 `reasoning_effort`，`openai_responses` 映射为 `reasoning.effort`，`anthropic_messages` 映射为 `thinking`（`disabled` 或受限于 `max_output_tokens` 的 `budget_tokens`），`gemini_generate_content` 映射为 `generationConfig.thinkingConfig.thinkingBudget`。
+
 ## 问答、后台执行与修改
 
 `POST /chat`：
@@ -81,6 +84,7 @@ group: "api"
   "client_request_id": "<本次请求的 UUID>",
   "message": "查询这个发行版的发行主体和收录内容",
   "model_id": "<站点模型或本人自备模型 UUID>",
+  "reasoning_effort": "medium",
   "search_provider_id": "<可选的搜索服务 UUID>",
   "search_byo_provider_id": "<可选的本人自备服务商 UUID>",
   "conversation_id": "<可选的已有会话 UUID>",
@@ -103,11 +107,26 @@ group: "api"
 | 方法与路径 | 用途 |
 | --- | --- |
 | `GET /conversations` | 本人会话列表（含可选 `active_request_id`，不含完整消息） |
-| `POST /conversations` | 创建空会话，字段为 `title/model_id` |
+| `POST /conversations` | 创建空会话，字段为 `title/model_id/reasoning_effort` |
 | `GET /conversations/:id` | 本人会话详情、消息与 `active_request_id` |
 | `DELETE /conversations/:id` | 删除未在执行中的本人会话 |
 | `GET /requests` | 本人请求列表，可按 `status`、`conversation_id` 筛选 |
 | `GET /requests/:id` | 本人单次请求的状态（`pending/completed/failed`）与 `response` |
+
+## 自主探索任务（Planner–Worker）
+
+对话主助手（MainAgent）仅在用户发送消息时按轮运行，用于直接问答或通过 `assistant_mission` 工具查看、创建和调控后台自主任务。大范围目录盘点与补全通过 `/api/assistant/missions`（个人范围）或 `/api/curator/missions`（后台维护范围）运行：规划器（Planner）只维护持久计划并向 Frontier 队列派发 `recon`、`research`、`edit`、`review` 四类 Worker 子代理，不直接调用目录查询或编辑工具；Worker 独立执行并通过 `list_worker_traces`、`get_worker_trace`、`search_worker_traces` 共享已发现的实体 UUID、来源与执行轨迹。
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `GET /missions` | 分页列出自主任务，可按 `status` 筛选 |
+| `POST /missions` | 创建并启动自主任务（字段：`client_request_id/title/goal/model_id/worker_model_id/reasoning_effort/worker_reasoning_effort/search_provider_id/search_byo_provider_id/budget_credits/max_workers/max_tasks/max_planner_rounds/prefer_pull_request`） |
+| `GET /missions/:id` | 读取任务进度、计划、Planner 轮次与 Frontier 子任务 |
+| `GET /missions/:id/tasks/:task_id` | 读取指定 Worker 子任务的完整消息与工具轨迹 |
+| `GET /missions/:id/planner-runs/:run_id` | 读取指定 Planner 规划轮次的完整轨迹 |
+| `POST /missions/:id/steer` | 在运行或暂停期间补充范围指令（`message`）或调整积分预算（`budget_credits`） |
+| `POST /missions/:id/pause`、`resume`、`stop` | 暂停、恢复或停止任务 |
+| `DELETE /missions/:id` | 删除非运行状态的本人自主任务 |
 
 ## Token、价格与预算
 
@@ -247,6 +266,6 @@ HTTP 200 且有结果按服务当时费率结算，空结果与明确失败释�
 | `POST /sweep` | 请求确定性扫描 |
 | `POST /findings/:id/reopen`、`POST /findings/:id/ignore` | 重新排队、忽略待办 |
 
-原设置字段保留，`execution` 包含：`child_model_id`（空值跟随主模型）、`search_provider_id`、`search_byo_provider_id`、`max_children`（1–8）、`allow_reviews`、`auto_merge_reviews`。`model_id` 与 `execution.child_model_id` 均可选择站点模型或管理员本人的 `byo_models`，`execution.search_byo_provider_id` 可选择管理员本人的 `byo_providers`。`billing_owner_id` 由服务器自动绑定实际保存配置的管理员，不能手填冒用。`interval_seconds` 是两轮检查间隔，`max_runs_per_hour` 限制子任务数。平台付费调用受 `monthly_credit_allowance` 约束，纯自备模型加免费或自备搜索可设 0 额度。保存设置不覆盖暂停状态。
+原设置字段保留，`execution` 包含：`child_model_id`（空值跟随主模型）、`reasoning_effort`、`child_reasoning_effort`、`search_provider_id`、`search_byo_provider_id`、`max_children`（1–8）、`allow_reviews`、`auto_merge_reviews`。`model_id` 与 `execution.child_model_id` 均可选择站点模型或管理员本人的 `byo_models`，`execution.search_byo_provider_id` 可选择管理员本人的 `byo_providers`。`billing_owner_id` 由服务器自动绑定实际保存配置的管理员，不能手填冒用。`interval_seconds` 是两轮检查间隔，`max_runs_per_hour` 限制子任务数。平台付费调用受 `monthly_credit_allowance` 约束，纯自备模型加免费或自备搜索可设 0 额度。保存设置不覆盖暂停状态。
 
 主 Agent 只在有到期待办时运行，通过受控工具创建 review/research/repair 子 Agent，消息与父子关系持久保存。审核任务独立保存输入 `review_pr_id`，输出结果仍用 `pull_request_id`；同一 PR 的新冻结 head/version 创建新任务。默认 `auto_merge_reviews=false`，显式开启且模型实际读取差异并高置信批准时，服务器才按任务原始 head/version 校验并合入。服务账号自己的 PR 不会由其审核。重启将未完成尝试标为中断并恢复未完成任务，完成任务不重派，已发生的副本提交先回读恢复。
