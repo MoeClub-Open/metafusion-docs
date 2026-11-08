@@ -73,7 +73,7 @@ group: "api"
 
 用量统一为 `input_tokens/output_tokens/cached_input_tokens`：Anthropic 输入包括普通输入、缓存读取和缓存创建；Gemini 输出包括候选输出与思考 token；Responses 使用其 input/output 及缓存输入字段。缺失 usage 不视为免费成功，沿用既有不重复调用与估算结算规则。
 
-平台模型、自备模型、会话、单次聊天请求、自主任务及自动维护均支持可选 `reasoning_effort`（思考强度），可选值为 `""`（跟随模型默认）、`"none"`、`"minimal"`、`"low"`、`"medium"`、`"high"`、`"xhigh"`：`openai_compatible` 映射为顶层 `reasoning_effort`，`openai_responses` 映射为 `reasoning.effort`，`anthropic_messages` 映射为 `thinking`（`disabled` 或受限于 `max_output_tokens` 的 `budget_tokens`），`gemini_generate_content` 映射为 `generationConfig.thinkingConfig.thinkingBudget`。
+平台模型、自备模型、会话、单次聊天请求、自主任务及自动维护均支持可选 `reasoning_effort`（思考强度），可选值为 `""`（跟随模型默认）、`"none"`、`"minimal"`、`"low"`、`"medium"`、`"high"`、`"xhigh"`、`"max"`：`openai_compatible` 映射为顶层 `reasoning_effort`，`openai_responses` 映射为 `reasoning.effort`，`anthropic_messages` 映射为 `thinking`（`disabled` 或受限于 `max_output_tokens` 的 `budget_tokens`），`gemini_generate_content` 映射为 `generationConfig.thinkingConfig.thinkingBudget`。
 
 ## 问答、后台执行与修改
 
@@ -98,7 +98,7 @@ group: "api"
 
 `background=true` 在校验并封存请求后立即返回 `200`，其中 `status="pending"`，同时服务端在独立后台上下文继续执行（最长 5 分钟），每完成一轮模型或工具调用即实时保存进度到会话 `messages` 与 `chat_requests.response`。会话在后台执行期间携带 `active_request_id`，调用方可通过 `GET /conversations/:id` 读取最新消息与工具调用进度，并通过 `GET /requests/:id` 查询最终状态、用量和 `push_receipts`。
 
-工具可读取定义、实体、身份候选、关系、工作副本、网页搜索和公开来源，修改统一在服务器工作副本中 stage、commit、push。普通账号发起 PR，免审账号可直接合入；不要求来源池、source_refs 或查证记录。工具轮数由站点配置为 1–12，每轮最多 8 次工具调用。达到限制或后续上游失败时，响应仍保留已经发生的提交回执和用量，调用方必须同时检查 `error` 与 `push_receipts`，不能把整轮当作未写入。
+工具可读取定义、实体、身份候选、关系、工作副本、网页搜索和公开来源，修改统一在服务器工作副本中 stage、commit、push。查询工具支持按需筛选字段与语种以节省上下文（`catalog_search` 支持 `fields`；`catalog_get` 支持 `fields`、`locales`、`attribute_keys`、`include_body`；`catalog_relationships` 支持 `classes` 与 `include_entities`；`catalog_definitions` 支持可选 `codes` 与 `locale`；`external_source_query` 支持可选 `source`、`include_raw`、`include_preview`；`catalog_workspace_*` 默认精简重复的快照载荷）。普通账号发起 PR，免审账号可直接合入；不要求来源池、source_refs 或查证记录。工具轮数由站点配置为 1–24（默认 12），每轮最多 8 次工具调用；当工具轮次执行完毕且尚未生成最终文本时，服务端自动追加一轮无工具的总结回合（或根据 `push_receipts` 生成保底变更摘要），输出完整的操作总结与实体链接。达到限制或后续上游失败时，响应仍保留已经发生的提交回执和用量，调用方必须同时检查 `error` 与 `push_receipts`，不能把整轮当作未写入。
 
 `client_request_id` 封存原请求。同 ID、同载荷的已完成请求回放原结果，不重复调用或提交；进行中的请求、不同载荷或其他账号复用该 ID 返回 `409 assistant_request_conflict`。断线后使用原 ID、会话或请求查询接口恢复，勿立即换 ID 重发修改。
 
