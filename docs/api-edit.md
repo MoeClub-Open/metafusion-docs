@@ -89,7 +89,7 @@ commit 使用 `message` 说明本次修改。来源、查证记录和质量报�
 | `url` | 必填的有效图片 URL；同一实体不能重复使用同一 URL |
 | `source` | 可选图片出处；存储地址与来源页面分别记录，不因缺来源而阻止提交 |
 | `caption` / `version_label` | 按语言码保存说明 / 图像版本名称；后者不是实体 version |
-| `role` | 可省略；有值时必须为 `picture_role` 词表项码 |
+| `role` | 可省略；有值时须为 `picture_role` 词项码（默认含 `key_visual`、`cover_art`、`back_cover`、`booklet`、`disc_art`、`obi`、`packaging`、`poster`、`character_portrait`、`person_portrait`、`logo`、`scene_still`，以实例 definitions 为准） |
 | `taken_at` | 可省略；允许年、年月、完整日期或 RFC3339 时间，仅作图像时间信息 |
 | `usage_period` | 可省略；填写时 begin/end 至少有一端，支持部分日期，包含两端，结束不能早于开始；可与其他图片使用期重叠 |
 | `asset_id` | 自托管资产的 UUID；外链图可省略。先完成上传，stage 自动验证资产状态与保存者资格并预留私有引用；正式封面绑定由合入后的生命周期同步管理 |

@@ -14,6 +14,10 @@ group: "api"
 
 存储基于内容寻址（SHA-256）去重，元数据与物理资产完全解耦。
 
+::: tip 主站仅目录图片模式（`STORAGE_CATALOG_ASSETS_ONLY=true`）
+主站默认开启该模式，仅接收 `pictures[]` 位图（`image/jpeg`、`image/png`、`image/webp`、`image/avif`、`image/gif`），完成时核验文件头魔数（不符回 `415 unsupported_media_type`）。`initiate` 禁传 `target_entity_id`，`binding_role` 固定为 `cover_image`；公开 `POST /api/storage/bind` 与 `DELETE /api/storage/bindings/{id}` 返回 `403 catalog_assets_only`。独立资源站置 `false` 后开放完整上传与绑定，经主站 `/api/catalog/*` 读取元数据与可见性。
+:::
+
 写接口（`initiate` / `complete` / `upload/stream` / `bind` / `unbind`）与 `/stats` 需要登录：
 `Authorization: Bearer <token>` 或 HttpOnly Cookie `mf_session`。
 其余读接口允许匿名，但只返回对调用者可见的内容，不可读一律 404。
@@ -258,6 +262,8 @@ GET /api/storage/download/{asset_id}
 
 | HTTP / error | 处理 |
 | --- | --- |
+| 403 catalog_assets_only | 实例仅托管目录图片：去掉 `target_entity_id` 与公开 `bind`/`unbind`，改经工作副本 `pictures[]` 合入 |
+| 415 unsupported_media_type | MIME 或文件头魔数不在允许范围（仅 JPEG/PNG/WebP/AVIF/GIF） |
 | 409 upload_in_progress | 同摘要已有他人的未完成上传，请审核者处理，不重复创建 |
 | 413 quota_exceeded | 账号或站点容量不足，停止新增上传并检查额度 |
 | 429 too_many_uploads | 并发上传额度已满，等现有任务完成或租约回收后再初始化 |
