@@ -38,14 +38,15 @@
 :root, .dark {
   --vp-c-bg: var(--bg-color);
   --vp-c-bg-alt: var(--surface-color);
-  --vp-c-bg-soft: var(--surface-subtle-color);
+  --vp-c-bg-soft: color-mix(in srgb, var(--surface-color) 72%, var(--bg-color));
   --vp-c-bg-elv: var(--surface-color);
+  --vp-c-default-soft: var(--surface-subtle-color);
   --vp-c-text-1: var(--text-strong-color);
   --vp-c-text-2: var(--text-body-color);
   --vp-c-text-3: var(--text-muted-color);
   --vp-c-divider: var(--line-color);
   --vp-c-border: var(--line-color);
-  --vp-c-gutter: var(--line-subtle-color);
+  --vp-c-gutter: color-mix(in srgb, var(--text-strong-color) 12%, var(--bg-color));
   --vp-c-brand-1: var(--primary-color);
   --vp-c-brand-2: var(--primary-hover-color);
   --vp-c-brand-3: var(--primary-color);
@@ -54,4 +55,42 @@
   --vp-button-brand-hover-text: var(--primary-contrast-color);
   --vp-button-brand-active-text: var(--primary-contrast-color);
 }
+
+.dark {
+  --vp-shadow-2: 0 6px 20px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.24);
+  --vp-shadow-3: 0 16px 40px rgba(0, 0, 0, 0.44), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.VPLocalNavOutlineDropdown .items {
+  background-color: var(--vp-c-gutter);
+  border-color: var(--line-strong-color);
+  z-index: 40;
+}
+
+.VPLocalNavOutlineDropdown .header,
+.VPLocalNavOutlineDropdown .outline {
+  background-color: var(--vp-c-bg-elv);
+}
+
+/* 多层标题目录层级区分（移动端下拉目录与桌面端右侧目录） */
+.VPLocalNavOutlineDropdown .outline > .VPDocOutlineItem > li > .outline-link,
+.VPDocAsideOutline .VPDocOutlineItem.root > li > .outline-link {
+  font-weight: 500;
+  color: var(--vp-c-text-1);
+}
+
+.VPLocalNavOutlineDropdown .VPDocOutlineItem .VPDocOutlineItem.nested,
+.VPDocAsideOutline .VPDocOutlineItem.root .VPDocOutlineItem.nested {
+  margin: 2px 0 6px 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--vp-c-divider);
+}
+
+.VPLocalNavOutlineDropdown .VPDocOutlineItem .VPDocOutlineItem.nested .outline-link,
+.VPDocAsideOutline .VPDocOutlineItem.root .VPDocOutlineItem.nested .outline-link {
+  font-size: 13px;
+  line-height: 28px;
+  color: var(--vp-c-text-2);
+}
+
 .VPButton, .VPNavBarSearch .DocSearch-Button, .VPNavBarSearch .VPNavBarSearchButton { border-radius: var(--radius-control); }

@@ -157,6 +157,13 @@ export default defineConfig({
     outline: {
       label: '页面导航',
       level: [2, 3]
-    }
+    },
+
+    sidebarMenuLabel: '文档目录',
+    returnToTopLabel: '返回顶部',
+    darkModeSwitchLabel: '外观',
+    lightModeSwitchTitle: '切换至浅色模式',
+    darkModeSwitchTitle: '切换至深色模式',
+    skipToContentLabel: '跳至正文'
   }
 });
