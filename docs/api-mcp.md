@@ -48,7 +48,7 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 | metafusion_reference | 云端读取版本锁定的技能或其他子系统 API 手册 |
 | metafusion_search / metafusion_entities_batch | 关键词与多维检索（支持 `query.fields` 按需筛选字段并内联 `cover_url`）；按 1–100 个 UUID 批量读取实体（支持可选 `fields`、`locales`、`attribute_keys`、`include_body` 按需裁剪） |
 | metafusion_relationships / catalog_graph_read | 单跳关系分页（每条边内联 `peer_id`/`peer_kind`/`peer_title`，可选 `include_entities` 默认 `false` 省略顶层重复 `entities` 字典）与 1–3 跳自动翻页合并图谱；均支持 `classes`、`direction`、`rule_codes`、`peer_kinds` 裁剪 |
-| metafusion_candidates / catalog_identity_check | 单条或 1–50 条批量身份查重；可选 `context` 输出置信度与 `reuse` / `review` / `distinct` 建议，不过滤同名候选 |
+| metafusion_candidates / catalog_identity_check | 单条或 1–50 条批量身份查重；默认含 `core_title` 匹配（`title_core`），支持 `include_approximate: true` 召回子串与 `pg_trgm` 近似候选（`title_similar`），可选主分类 `attributes` 冲突检测（`*_mismatch` -> `distinct`）及 `context` 输出 `reuse` / `review` / `distinct` 建议，不过滤同名候选 |
 | catalog_quality_audit | 1–100 个实体按需即时质量诊断，不保存、不阻塞编辑与合入 |
 | external_source_query | 只读查询 Bangumi、DLsite、DMM 数据与映射预览（可选 `include_raw` 默认 `false` 省略重复原始 JSON、`include_preview` 默认 `true`），不自动写库 |
 | metafusion_workspace_create / list / get / edit / checkout / members | 创建和维护服务器副本，加入记录与协作者 |
@@ -67,7 +67,7 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 
 动态字段仍以 definitions 为准，分页、冲突码和失败结果沿用原生 API。编辑先创建 workspace，按需 checkout，再多次 stage 和 commit，最后 push。stage 传 `expected_version` 与 `operations`；commit 传固定 `id`、`expected_version` 与 `message`；push 传 `expected_version`、`expected_head` 和可选 `title`。普通账号获得 PR，免审账号可直接合入。完整载荷见[工作副本与提交](/api-commits)。
 
-来源与查证记录可省略，不要求来源池、每操作 source_refs 或候选确认。未知结果回读原 commit、workspace 与 PR，不重复创建。真实冲突比较基线、当前值与副本值；正文支持行级自动合并。rebase 可指定 onto_commit_id 与 order，逐提交重放并保留原作者、原提交和替代关系；多步冲突使用 commit_id 区分并保留先前解决项，完成后再 push。所有历史列表按 total/limit/offset 翻页；history/commits 支持 record_id、target、author_id、since/until，分支 commits 另支持 state。diff/snapshot/compare 可按记录筛选，PR 返回 version/source_head_id 标识读取的冻结版本。未合入的私有活动不进入公开贡献流。
+工作副本协议不要求来源池、每操作 `source_refs` 或 `reviewed_candidate_ids`；但通过 MCP 操作的 Agent 在新建任何实体（`action: "create"`）前，**必须**调用 `catalog_identity_check` 或 `metafusion_candidates` 并传 `include_approximate: true`，对返回的 `reuse` 或 `review` 候选（含 `title_core`、`title_similar`）须核查 `assessment` 并读取候选详情与关联关系，确认非同一实体后再新建。未知结果回读原 commit、workspace 与 PR，不重复创建。真实冲突比较基线、当前值与副本值；正文支持行级自动合并。rebase 可指定 onto_commit_id 与 order，逐提交重放并保留原作者、原提交和替代关系；多步冲突使用 commit_id 区分并保留先前解决项，完成后再 push。所有历史列表按 total/limit/offset 翻页；history/commits 支持 record_id、target、author_id、since/until，分支 commits 另支持 state。diff/snapshot/compare 可按记录筛选，PR 返回 version/source_head_id 标识读取的冻结版本。未合入的私有活动不进入公开贡献流。
 
 文件 URL 必须是服务端可访问的公开 HTTPS 地址。URL 文件上限 1 GiB；base64 受 8 MiB 请求体上限约束。工具失败时保留 asset_id，检查原生存储状态后再处理。
 

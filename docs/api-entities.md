@@ -102,8 +102,12 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 {
   "kind": "work",
   "titles": ["夜明け", "Dawn"],
+  "include_approximate": true,
   "external_links": [{"kind": "wikidata", "value": "Q123"}],
-  "attributes": [{"key": "duration", "value": "213"}],
+  "attributes": [
+    {"key": "creation_form", "value": "song"},
+    {"key": "duration", "value": "213"}
+  ],
   "context": {
     "creator": ["<agent_uuid>"],
     "performer": ["<agent_uuid>"],
@@ -114,9 +118,15 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 }
 ```
 
-`kind` 必填，至少提供一类条件，每类最多 20 项、每个值最多 256 字节。条件之间为 OR：题名匹配基础题名、翻译题名、正式别名及 `nonofficial_aliases`，忽略大小写并合并空白；外部 ID 和标量/标量数组属性按文本精确比较。Expression/ContentUnit 可用 `work_id` 限定所属 Work，Medium 可用 `release_id` 限定 Release，Track 可用 `medium_id` 限定 Medium。相同题名、时长或版次属性只能定位候选，不能确认身份。
+`kind` 必填，至少提供一类条件，每类最多 20 项、每个值最多 256 字节。条件之间为 OR：题名覆盖基础题名、翻译题名、正式别名及 `nonofficial_aliases`；外部 ID 和标量/标量数组属性按文本精确比较。Expression/ContentUnit 可用 `work_id` 限定所属 Work，Medium 可用 `release_id` 限定 Release，Track 可用 `medium_id` 限定 Medium。相同题名、时长或版次属性只能定位候选，不能确认身份。
 
-可选 `context`（`creator`、`performer`、`label` 为主体 UUID 数组，`catalog_number` 为品番字符串数组，每项最多 20 个）仅用于计算置信度与排序，**从不缩减候选集**——同名但不同作者或厂牌的实体仍会返回。每条命中附带参考评估 `assessment: {matched_fields, conflicts?, context_summary?, confidence, recommended_action}`，`recommended_action` 取 `reuse` / `review` / `distinct`（其中 `nonofficial` 译名与 `nonofficial_aliases` 仅计为 `alias`，不触发 `title_exact` 高置信度；查询与候选 `agent_type` 双端非空且不同会记录 `agent_type_mismatch` 冲突并建议 `distinct`），仅供辅助判断，服务端不会自动合并。
+题名归一化与近似召回：
+
+- **默认 `core_title` 索引匹配（`title_core`）**：除忽略大小写并合并空白的正式题名（`title_exact`）与别名（`alias`，含 `nonofficial` 译名及 `nonofficial_aliases`）匹配外，索引默认计算规范化 `core_title`——折叠全角 ASCII 与全角空白，剥离前后法人词缀（如 `株式会社`、`有限会社`、`Co., Ltd.`、`Inc.`）、末尾括号媒介修饰词（如 `(TVアニメ)`、`[CD]`、`【アニメ】`）及中点与标点符号（如 `Poppin'Party` ↔ `Poppin Party`），命中记入 `matched_fields: ["title_core"]`，默认 `recommended_action: "review"`。
+- **近似题名召回（`include_approximate: true` -> `title_similar`）**：显式传 `include_approximate: true` 时，基于 `core_title` 额外召回子串包含与 `pg_trgm`（`word_similarity >= 0.6`）近似候选，命中记入 `matched_fields: ["title_similar"]`，无冲突时 `recommended_action: "review"`。
+- **主分类冲突（`conflicts` -> `distinct`）**：当请求 `attributes` 传入主分类字段（`agent_type`、`creation_form`、`collection_type`）且候选实体该字段也非空但值不同时，`assessment.conflicts` 记录 `agent_type_mismatch`、`creation_form_mismatch` 或 `collection_type_mismatch`（`context_summary` 同时回显候选的主分类值），并将 `recommended_action` 设为 `"distinct"`（如区分同名 `song` 与 `original_album`）。
+
+可选 `context`（`creator`、`performer`、`label` 为主体 UUID 数组，`catalog_number` 为品番字符串数组，每项最多 20 个）仅用于计算置信度与排序，**从不缩减候选集**——同名但不同作者或厂牌的实体仍会返回。每条命中附带参考评估 `assessment: {matched_fields, conflicts?, context_summary?, confidence, recommended_action}`，`recommended_action` 取 `reuse` / `review` / `distinct`，仅供辅助判断，服务端不会自动合并。
 
 响应包含 `items`、`total`、`complete`、`basis="postgres_repeatable_read"`。每项含 `matched` 原始实体摘要、`canonical` 保留实体摘要及 `assessment`；不能解析时 `canonical=null` 并带 `resolution_error`。摘要不能当作完整的副本编辑文档。
 
@@ -236,7 +246,7 @@ POST /api/catalog/expressions/details
 
 ## 批量身份候选与质量检查
 
-`POST /api/catalog/entities/candidates/batch` 接受 `{"queries":[{"key":"work-a","kind":"work","titles":["题名"],"context":{"creator":["<agent_uuid>"]}}]}`，一次最多 50 个查询。每项使用前述候选查询的平铺字段（含可选 `context`），`key` 必须唯一且非空。响应为 `results[]`，保留各项 `key`、`items`（每条带 `assessment`）、`total`、`complete` 与可能的 `error`；逐项核对，不能把失败或不完整结果当成零候选。
+`POST /api/catalog/entities/candidates/batch` 接受 `{"queries":[{"key":"work-a","kind":"work","titles":["题名"],"include_approximate":true,"attributes":[{"key":"creation_form","value":"song"}],"context":{"creator":["<agent_uuid>"]}}]}`，一次最多 50 个查询。每项使用前述候选查询的平铺字段（默认覆盖 `core_title`，支持 `include_approximate: true` 召回 `title_similar` 近似候选、`attributes` 检测 `agent_type_mismatch` / `creation_form_mismatch` / `collection_type_mismatch` 冲突及可选 `context`），`key` 必须唯一且非空。响应为 `results[]`，保留各项 `key`、`items`（每条带 `assessment`）、`total`、`complete` 与可能的 `error`；逐项核对，不能把失败或不完整结果当成零候选。
 
 | 接口 | 输入与返回 |
 | --- | --- |

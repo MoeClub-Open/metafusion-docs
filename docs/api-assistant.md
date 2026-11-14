@@ -100,6 +100,8 @@ group: "api"
 
 工具可读取定义、实体、身份候选、关系、工作副本、网页搜索和公开来源，修改统一在服务器工作副本中 stage、commit、push。查询工具支持按需筛选字段与语种以节省上下文（`catalog_search` 支持 `fields`；`catalog_get` 支持 `fields`、`locales`、`attribute_keys`、`include_body`；`catalog_relationships` 支持 `classes` 与 `include_entities`；`catalog_definitions` 支持可选 `codes` 与 `locale`；`external_source_query` 支持可选 `source`、`include_raw`、`include_preview`；`catalog_workspace_*` 默认精简重复的快照载荷）。普通账号发起 PR，免审账号可直接合入；不要求来源池、source_refs 或查证记录。工具轮数由站点配置为 1–24（默认 12），每轮最多 8 次工具调用；当工具轮次执行完毕且尚未生成最终文本时，服务端自动追加一轮无工具的总结回合（或根据 `push_receipts` 生成保底变更摘要），输出完整的操作总结与实体链接。达到限制或后续上游失败时，响应仍保留已经发生的提交回执和用量，调用方必须同时检查 `error` 与 `push_receipts`，不能把整轮当作未写入。
 
+`catalog_candidates` 查重工具默认覆盖 `core_title` 规范化匹配（`title_core`），并支持可选布尔参数 `include_approximate`（传入 `titles` 时默认 `true`，召回子串与 `pg_trgm` 近似候选 `title_similar`，显式传 `false` 可关闭）、主分类 `attributes` 冲突检测（`agent_type_mismatch` / `creation_form_mismatch` / `collection_type_mismatch` -> `distinct`）及 `context`。工作副本协议不要求提交 `reviewed_candidate_ids`，但助手与后台 Worker（含 `edit` 子代理）在新建任何实体前必须先调用 `catalog_candidates` 执行近似查重；命中 `reuse` 或 `review` 候选时须结合 `assessment` 并用 `catalog_get` / `catalog_relationships` 核查候选详情与关系，确认是独立实体后再新建。
+
 `client_request_id` 封存原请求。同 ID、同载荷的已完成请求回放原结果，不重复调用或提交；进行中的请求、不同载荷或其他账号复用该 ID 返回 `409 assistant_request_conflict`。断线后使用原 ID、会话或请求查询接口恢复，勿立即换 ID 重发修改。
 
 会话与请求查询接口：

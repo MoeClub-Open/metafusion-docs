@@ -22,19 +22,21 @@ group: "model"
 | 载体 Medium | 这一发行由哪些承载单元组成？ | CD、BD、纸质册、数字集 |
 | 收录位置 Track | 内容在载体的什么位置？ | 第 1 轨、A1、页码范围或菜单项 |
 
-这些是固定种类。描述性分类用标签，可填写的附加字段来自站点定义。简单作品只建立有来源的条目，不必凑齐八类。
+八类 `kind` 为固定骨架；各层级同时提供受控主分类字段（如作品 `creation_form`、主体 `agent_type`、集合 `collection_type`、发行 `edition_type`、载体 `format`、内容单元 `entry_role`；管理员可在 `definitions` 中扩展，基准词表见[实体模型与字段](/frbr-model#主分类字段与种子词表)）。详情页标题栏紧邻实体 `kind` 徽章并列展示主分类徽章，便于一眼区分同名歌曲与同名专辑、个人与团体或企划与系列。风格与题材用自由标签补充；简单作品只建立有来源的条目，不必凑齐八类。
 
 ## 歌曲与专辑：复用同一录音
 
-歌曲 A 是一个 Work，原唱录音 A1 是它的 Expression。单曲、专辑和精选集各建自己的 Release；如果收录的是同一份录音，它们都引用 A1。
+单首乐曲作品建 `work` 并设 `creation_form=song`（仅作为曲目收录时不能填 `original_album` 或 `single`），原唱录音 A1 是它的 `expression`。具有独立曲目编排或企划身份的单曲、迷你专辑、原创专辑、同人专辑、原声集、精选集，按形态建 `creation_form` 为 `single`、`ep`、`original_album`、`doujin_album`、`soundtrack` 或 `compilation_album` 的 `work`（可用 `includes` 有序关联所含歌曲 `work`）；同名主打歌与同名单曲/专辑是两个独立的 `work`。各次出版分别建 `release`；若收录的是同一份录音，均引用 A1。
 
 ```text
-歌曲 A（Work）
+歌曲 A（Work, creation_form=song）
   └ 原唱录音 A1（Expression）
       ↑ 收录                         ↑ 收录
 单曲发行 → CD → 第 1 轨       专辑发行 → CD → 第 3 轨
  Release  Medium  Track        Release  Medium  Track
 ```
+
+歌曲作曲、作词用 `composed_by`、`lyricist_of`（通常连歌曲 `work`），编曲用 `arranged_by`（通常连具体录音 `expression`，仅作品级来源明确时连 `work`）。乐队或组合演唱/演奏用 `performed_by` 指向团体 `agent`（`agent_type=group`）；已知成员组成时，个人成员（`agent_type=person`）通过 `member_of` 指向该团体，`credit_role` 记录乐器或声部（如 `Vo. & Gt.`），在籍期写 `begin_date` / `end_date`。
 
 新录音或有实质内容差异的版本另建 Expression。仅格式、载体或编码不同，不足以证明是新的录音。
 
@@ -71,13 +73,27 @@ Release：作品 A + 作品 B 盒装
     Track 1 → contents → Expression B1 → Work B
 ```
 
+## 跨媒体企划与作品系列
+
+跨媒体企划建立 `collection` 并设 `collection_type=franchise`（同一媒介的多部作品系列用 `series`，选集/丛书用 `anthology`，展会/活动特辑用 `event_catalog`）。通过 `includes`（`collection -> work|collection`）将企划下的 TV 动画（`tv_anime`）、剧场动画（`theater_anime`）、游戏（`commercial_game` / `visual_novel`）、漫画、小说及企划音乐作品统一归入该集合：
+
+```text
+企划 C（Collection, collection_type=franchise）
+  ├ includes → 第一季动画（Work, creation_form=tv_anime）
+  ├ includes → 剧场版动画（Work, creation_form=theater_anime）
+  ├ includes → 手机游戏（Work, creation_form=commercial_game）
+  └ includes → 角色单曲 / 原声集（Work, creation_form=single / soundtrack）
+```
+
+各子作品之间的改编、续作、外传与配乐关系继续使用 `adaptation_of`、`sequel_of`、`spin_off_of`、`soundtrack_of` 表达，不把多部独立作品混入单个 `work`。
+
 ## 组成、版本组和署名
 
 - **表达组成**：整体与部分 Expression 属于同一 Work，通过定义中用途为 `expression_composition` 的关系连接；常见种子码为 `expression_part`。
 - **显式版本组**：Release 通过用途为 `release_group` 的关系归到一个 Work 或 Collection；常见种子码为 `edition_of`。共同收录某首歌不等于属于同一版本组。
-- **创作与参与关系**：从适用的作品、篇目、表达或发行连接到主体。关系方向、允许层级和上下文字段均按当前定义选择。
+- **署名边界（`created_by` / `produced_by` / `credit_for`）**：`created_by` 仅限原作者、原案、著作人，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；动画制作公司（`アニメーション制作`）、制作委员会、制片人、音乐制作人、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）一律用 `produced_by`（原始职衔填 `credit_role`，发行版的出版/发行商优先填 `Release.attributes.publisher`）；`credit_for` 仅在 16 条专用署名关系均不适用时作兜底（如音响监督、美术监督、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边。完整 32 条种子关系见[实体模型与字段](/frbr-model#关系)。
 
-同一演员在同一作品里担任不同角色时，用多条具有不同角色上下文的关系表达，不重复建演员。
+同一声优在同一作品里担任不同角色时，用多条带不同 `character` 与 `language` 的 `voiced_by` 关系表达，不重复建人物；虚构角色登场用 `character_in`（`agent -> work|collection`）并在 `character_rank` 记录番位。
 
 详情页的关系目录按定义分组，并区分作品、表达和发行等层级，可搜索名称、别名及关系属性。同一对象的多条署名合并展示，仍保留每条署名的职位、语言、适用上下文等属性；同名但身份不同的对象分别保留。主体间的直接关系可展示头像或立绘，成员职责和有效日期只显示实际录入的关系属性。
 
