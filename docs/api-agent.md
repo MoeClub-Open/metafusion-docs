@@ -34,7 +34,7 @@ group: "api"
 
 按 metafusion-curator 和 lrm-catalog-standards 技能执行用户已授权的任务；关系遍历可用 metafusion-relationship-query。
 有 MCP 时直接读取云端技能和当前 API 契约，无需安装本地工具；字段、词项与关系以目标实例 definitions 为准（技能参考提供完整标准基线，实例可在后台扩展）。
-检索顶层条目优先限定 kinds=work,release,agent,collection；多个已知 UUID 用批量接口一次读取，查询实体与关系按需传 fields/locales/attribute_keys/classes 裁剪返回体积。
+检索顶层条目优先限定 kinds=work,release,agent,collection,event；多个已知 UUID 用批量接口一次读取，查询实体与关系按需传 fields/locales/attribute_keys/classes/active_only/as_of 裁剪返回体积。
 新建任何实体（action=create）前必须启用近似查重（MCP catalog_identity_check/metafusion_candidates 传 include_approximate=true，本地 mf-find-identity.ts --approximate），核查 assessment（reuse|review|distinct、title_core、title_similar 及子类型冲突）并回读候选详情与关系后，再决定复用已有 UUID 还是新建独立实体。
 分类与署名边界：单首乐曲 Work 的 creation_form 填 song（仅作曲目收录时不填 original_album/single），单曲/EP/专辑企划填 single/ep/original_album 等并经 includes 包含 song Work；跨媒体企划 Collection（collection_type=franchise）经 includes 聚合动画/游戏/音乐等 Work。created_by 仅限原作者/原案/著作人；动画制作公司、委员会、制片人、同人社团、游戏厂商用 produced_by（原职衔写 credit_role，出版发行商写 Release.attributes.publisher）；专用署名码优先，credit_for 仅兜底无专用码职责且绝不重复建边。
 可以只提交当前确认的修改，不必先质检、评分或补齐整个条目。中文名称使用官方译名，无官方译名保留原名，社区译名须标 nonofficial 或写入 nonofficial_aliases。
@@ -56,12 +56,12 @@ group: "api"
 
 | 建议工具 | HTTP 入口 | 用途 |
 | --- | --- | --- |
-| find_entities | `GET /api/catalog/entities` | 浏览与筛选（顶层检索传 `kinds=work,release,agent,collection`，已知多 ID 可传 `ids`），分页按查询模式处理 |
+| find_entities | `GET /api/catalog/entities` | 浏览与筛选（顶层检索传 `kinds=work,release,agent,collection,event`，已知多 ID 可传 `ids`），分页按查询模式处理 |
 | find_identity_candidates | `POST /api/catalog/entities/candidates`、`POST /api/catalog/entities/candidates/batch` | [单次或批量快照查重并解析身份](/api-entities#并发编目的查重候选)，新建前传 `include_approximate: true`，支持主分类冲突检测与可选 `context` 置信度评估 |
 | get_entity | `GET /api/catalog/entities/{id}` | 获取完整实体与当前 version |
 | get_entities_batch | `POST /api/catalog/entities/batch` | 单次快照批量获取 1–100 个完整实体、`covers` 与 `missing` |
 | resolve_identity | `GET /api/catalog/entities/{id}/identity` | 解析保留身份与历史别名 |
-| query_relationships | `POST /api/catalog/relationships/query` | 读取直接关系与上下文引用，支持 `classes`、`direction`、`rule_codes`、`peer_kinds` 裁剪 |
+| query_relationships | `POST /api/catalog/relationships/query` | 读取直接关系与上下文引用，支持 `classes`、`direction`、`rule_codes`、`peer_kinds`、`active_only`、`as_of` 裁剪 |
 | get_definitions | `GET /api/catalog/definitions` | 获取当前动态约束 |
 | create_workspace / stage / commit / push / rebase | `POST /api/catalog/workspaces`、`PUT .../{id}/changes`、`POST .../{id}/commits`、`POST .../{id}/push`、`POST .../{id}/rebase` | [服务器副本、多次提交与冲突处理](/api-commits) |
 | get_commit / get_pull_request / merge_pull_request | `GET /api/catalog/commits/{id}`、`GET /api/catalog/pull-requests/{id}`、`POST .../{id}/merge` | 读取原作者提交和 PR，按权限合并 |

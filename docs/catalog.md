@@ -9,7 +9,7 @@ group: "model"
 
 目录把作品身份、具体内容与发行记录分开保存。这样可以复用同一份录音或正文，同时保留每次发行的编号、包装和实际目录。
 
-## 八类条目
+## 九类条目
 
 | 条目 | 回答的问题 | 例子 |
 | --- | --- | --- |
@@ -21,8 +21,9 @@ group: "model"
 | 发行 Release | 哪一次公开出版或发布？ | 普通版、限定版、地区版、免费数字版 |
 | 载体 Medium | 这一发行由哪些承载单元组成？ | CD、BD、纸质册、数字集 |
 | 收录位置 Track | 内容在载体的什么位置？ | 第 1 轨、A1、页码范围或菜单项 |
+| 活动 Event | 发生在哪一场独立活动？ | 演唱会、巡演、音乐节、展会/即卖会、颁奖礼 |
 
-八类 `kind` 为固定骨架；各层级同时提供受控主分类字段（如作品 `creation_form`、主体 `agent_type`、集合 `collection_type`、发行 `edition_type`、载体 `format`、内容单元 `entry_role`；管理员可在 `definitions` 中扩展，基准词表见[实体模型与字段](/frbr-model#主分类字段与种子词表)）。详情页标题栏紧邻实体 `kind` 徽章并列展示主分类徽章，便于一眼区分同名歌曲与同名专辑、个人与团体或企划与系列。风格与题材用自由标签补充；简单作品只建立有来源的条目，不必凑齐八类。
+九类 `kind` 为固定骨架；各层级同时提供受控主分类字段（如作品 `creation_form`、主体 `agent_type`、集合 `collection_type`、活动 `event_type`、发行 `edition_type`、载体 `format`、内容单元 `entry_role`；管理员可在 `definitions` 中扩展，基准词表见[实体模型与字段](/frbr-model#主分类字段与种子词表)）。详情页标题栏紧邻实体 `kind` 徽章并列展示主分类徽章，便于一眼区分同名歌曲与同名专辑、个人与团体或企划与系列。风格与题材用自由标签补充；简单作品只建立有来源的条目，不必凑齐九类。
 
 ## 歌曲与专辑：复用同一录音
 
@@ -87,15 +88,20 @@ Release：作品 A + 作品 B 盒装
 
 各子作品之间的改编、续作、外传与配乐关系继续使用 `adaptation_of`、`sequel_of`、`spin_off_of`、`soundtrack_of` 表达，不把多部独立作品混入单个 `work`。
 
+## 活动与主体沿革
+
+- **双层事件模型**：多主体或多作品共用的演唱会、巡回演出、音乐节、同人即卖会、颁奖礼建立顶层 `event`（`attributes.event_type`），巡演与分场次用 `includes`（`event -> event`）关联，现场录音或映像用 `recorded_at` 指向 `event`，展会或现场首发盘用 `released_at` 指向 `event`；仅属于单一作品、表达或发行版的发售、首播、重印、预售、停售节点，记录在该条目的 `attributes.events[]` 列表中（需要关联顶层活动时填写子字段 `event`）。
+- **主体改名、隶属与承继**：同一法人、乐队或艺人改名保留同一 `agent`，旧名与启用区间填入 `former_names`，休团与复出填入 `activity_periods`；母子公司或厂牌隶属用 `subsidiary_of`（附 `begin_date`/`end_date`/`ended` 记录归属变更），跨独立主体的合并、收购、拆分、权利移交用 `succeeded_by`（前身指向后继，填 `transition_type`）。
+
 ## 组成、版本组和署名
 
 - **表达组成**：整体与部分 Expression 属于同一 Work，通过定义中用途为 `expression_composition` 的关系连接；常见种子码为 `expression_part`。
 - **显式版本组**：Release 通过用途为 `release_group` 的关系归到一个 Work 或 Collection；常见种子码为 `edition_of`。共同收录某首歌不等于属于同一版本组。
-- **署名边界（`created_by` / `produced_by` / `credit_for`）**：`created_by` 仅限原作者、原案、著作人，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；动画制作公司（`アニメーション制作`）、制作委员会、制片人、音乐制作人、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）一律用 `produced_by`（原始职衔填 `credit_role`，发行版的出版/发行商优先填 `Release.attributes.publisher`）；`credit_for` 仅在 16 条专用署名关系均不适用时作兜底（如音响监督、美术监督、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边。完整 32 条种子关系见[实体模型与字段](/frbr-model#关系)。
+- **署名边界（`created_by` / `produced_by` / `credit_for`）**：`created_by` 仅限原作者、原案、著作人，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；动画制作公司（`アニメーション制作`）、制作委员会、制片人、音乐制作人、活动主办、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）一律用 `produced_by`（原始职衔填 `credit_role`，发行版的出版/发行商优先填 `Release.attributes.publisher`）；`credit_for` 仅在 16 条专用署名关系均不适用时作兜底（如音响监督、美术监督、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边。完整 36 条种子关系见[实体模型与字段](/frbr-model#关系)。
 
-同一声优在同一作品里担任不同角色时，用多条带不同 `character` 与 `language` 的 `voiced_by` 关系表达，不重复建人物；虚构角色登场用 `character_in`（`agent -> work|collection`）并在 `character_rank` 记录番位。
+同一声优在同一作品里担任不同角色时，用多条带不同 `character` 与 `language` 的 `voiced_by` 关系表达，不重复建人物；虚构角色登场用 `character_in`（`agent -> work|collection|event`）并在 `character_rank` 记录番位。
 
-详情页的关系目录按定义分组，并区分作品、表达和发行等层级，可搜索名称、别名及关系属性。同一对象的多条署名合并展示，仍保留每条署名的职位、语言、适用上下文等属性；同名但身份不同的对象分别保留。主体间的直接关系可展示头像或立绘，成员职责和有效日期只显示实际录入的关系属性。
+详情页的关系目录按定义分组，并区分作品、表达、发行和活动等层级，可搜索名称、别名及关系属性，并支持「仅当前有效」与按时点（`YYYY` / `YYYY-MM` / `YYYY-MM-DD`）筛选历史关系。同一对象的多条署名合并展示，仍保留每条署名的职位、语言、适用上下文等属性；同名但身份不同的对象分别保留。主体间的直接关系可展示头像或立绘，成员职责、承继方式和有效日期只显示实际录入的关系属性。
 
 ## 标签、货架与多语言
 

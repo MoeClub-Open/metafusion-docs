@@ -7,6 +7,12 @@ group: "legal"
 
 # 更新日志
 
+## 2026-11-16 — 活动实体、时态限定与机构沿革关系
+
+- 新增第九类固定实体 `event`（`event_type` 覆盖演唱会、巡演、音乐节、展会/即卖会、舞台剧、特别节目、奖项、展览），与单条目内嵌 `attributes.events[]`（新增 `event_kind`、`end_date`、`ended`、`date_precision`、`event` 关联）组成双层事件模型；互动收藏支持 `event`。
+- 实体与语义关系新增统一时态限定字段（`ended`、`date_precision`、`earliest_date`、`latest_date`、`time_zone`）及区间起止校验；`GET /api/catalog/entities/:id/links`、`POST /api/catalog/relationships/query`、MCP 图谱工具与详情页关系目录支持 `active_only` 与 `as_of` 时点筛选。
+- 主体 `agent` 新增曾用名列表 `former_names`（同步纳入全文搜索与查重候选索引）并扩展 `activity_periods`；新增语义关系 `subsidiary_of`（上级机构）、`succeeded_by`（后继主体 + `transition_type`）、`recorded_at`（录制/演出于活动）、`released_at`（首发/颁布于活动）。
+
 ## 2026-10-18 — 服务器副本与 PR 协作
 
 - 目录编辑统一为 workspace → 多次 stage → 多次不可变 commit → push。免审账号可直接合入，其他账号通过 PR；合入前公开条目保持原内容。

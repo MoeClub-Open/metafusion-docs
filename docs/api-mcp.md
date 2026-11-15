@@ -47,7 +47,7 @@ MCP 调用沿用各下游服务的账号预算与权限校验，目录额度及�
 | metafusion_api_contract | 当前目录 OpenAPI 与具体操作模式 |
 | metafusion_reference | 云端读取版本锁定的技能或其他子系统 API 手册 |
 | metafusion_search / metafusion_entities_batch | 关键词与多维检索（支持 `query.fields` 按需筛选字段并内联 `cover_url`）；按 1–100 个 UUID 批量读取实体（支持可选 `fields`、`locales`、`attribute_keys`、`include_body` 按需裁剪） |
-| metafusion_relationships / catalog_graph_read | 单跳关系分页（每条边内联 `peer_id`/`peer_kind`/`peer_title`，可选 `include_entities` 默认 `false` 省略顶层重复 `entities` 字典）与 1–3 跳自动翻页合并图谱；均支持 `classes`、`direction`、`rule_codes`、`peer_kinds` 裁剪 |
+| metafusion_relationships / catalog_graph_read | 单跳关系分页（每条边内联 `peer_id`/`peer_kind`/`peer_title`，可选 `include_entities` 默认 `false` 省略顶层重复 `entities` 字典）与 1–3 跳自动翻页合并图谱；均支持 `classes`、`direction`、`rule_codes`、`peer_kinds`、`active_only`、`as_of` 裁剪 |
 | metafusion_candidates / catalog_identity_check | 单条或 1–50 条批量身份查重；默认含 `core_title` 匹配（`title_core`），支持 `include_approximate: true` 召回子串与 `pg_trgm` 近似候选（`title_similar`），可选主分类 `attributes` 冲突检测（`*_mismatch` -> `distinct`）及 `context` 输出 `reuse` / `review` / `distinct` 建议，不过滤同名候选 |
 | catalog_quality_audit | 1–100 个实体按需即时质量诊断，不保存、不阻塞编辑与合入 |
 | external_source_query | 只读查询 Bangumi、DLsite、DMM 数据与映射预览（可选 `include_raw` 默认 `false` 省略重复原始 JSON、`include_preview` 默认 `true`），不自动写库 |

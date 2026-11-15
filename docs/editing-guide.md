@@ -52,6 +52,7 @@ Work 使用作品本身的名称；Release 原样保留发行方为该版使用�
 | 实际目录 | 分盘、分卷、曲目符合实物或发布记录；定位注明时间、页码或路径的参照范围。盒内附件、渠道赠品与真实载体分开记录 |
 | 原作、制作与兜底署名 | `created_by` **仅限原作者、原案、著作人**，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；动画制作公司（`アニメーション制作`）、出品/制作委员会、制片人、音乐制作人、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）用 `produced_by` 并在 `credit_role` 保留原始职衔；`credit_for` 仅在 16 条专用署名关系均不适用时使用（如音响监督、美术监督、色彩设计、剪辑、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边 |
 | 乐队、歌曲与角色署名 | 乐队/组合（`agent_type=group`）演出用 `performed_by`，已知成员通过 `member_of`（个人 -> 团体）关联并在 `credit_role` 写声部/乐器（如 `Vo. & Gt.`）；歌曲作曲、作词用 `composed_by`、`lyricist_of`（通常归 `work`），编曲用 `arranged_by`（通常归录音 `expression`）。虚构角色登场用 `character_in` 配 `character_rank` 番位；同一声优多角色用多条带 `character`、`language` 的 `voiced_by` 表达 |
+| 活动与主体变更 | 跨作品/跨主体的演唱会、巡演、即卖会建顶层 `event`（`recorded_at` / `released_at` 关联现场作品与首发盘），单一作品或发行的发售、重印、停售节点写 `attributes.events[]`。同一主体改名保留原 `agent` 写 `former_names`；母子公司变更用带起止日与 `ended` 的 `subsidiary_of`，独立主体间的收购、合并、拆分、移交用 `succeeded_by`（填 `transition_type`） |
 
 保存多层条目时逐步核对，每一步成功不代表整条发行链完成。后续失败时说明已保存与尚未完成的部分，避免重复创建。
 

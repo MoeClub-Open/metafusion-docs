@@ -1,13 +1,13 @@
 ---
 title: "实体模型与字段"
-description: "八类实体的公共字段、固定归属、收录与动态关系。"
+description: "九类实体的公共字段、固定归属、收录与动态关系。"
 order: 20
 group: "model"
 ---
 
 # 实体模型与字段
 
-MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录结构和动态定义实现目录。建模示例见[元数据目录教程](/catalog)，本页用于查字段和约束。
+MetaFusion 借用 IFLA LRM 的分层思想，并以九类固定实体、收录结构和动态定义实现目录。建模示例见[元数据目录教程](/catalog)，本页用于查字段和约束。
 
 ## 概念与实现
 
@@ -21,6 +21,7 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | 发行 | `release` | `attributes.edition_type` 等正交维度 | 公开出版或发布记录 |
 | 载体 | `medium` | `attributes.format` | 同发行内的承载单元 |
 | 收录位置 | `track` | `attributes.role` + `contents[]` | 同载体内的位置与实际收录 |
+| 活动 | `event` | `attributes.event_type` | 演唱会、巡演、展会、颁奖礼等跨条目活动 |
 
 文件资产由存储服务管理。目录引用表达与定位，文件绑定引用条目身份。
 
@@ -46,13 +47,13 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 
 ## 主分类字段与种子词表
 
-站点管理员可在 `definitions` 中扩展字段、词表与关系，运行时以 `GET /api/catalog/definitions` 为准；下表列出平台基准种子定义。详情页标题栏紧邻实体 `kind` 徽章并列展示主分类徽章（`work.creation_form`、`agent.agent_type`、`collection.collection_type`、`release.edition_type`、`medium.format`、`content_unit.entry_role`）。
+站点管理员可在 `definitions` 中扩展字段、词表与关系，运行时以 `GET /api/catalog/definitions` 为准；下表列出平台基准种子定义。详情页标题栏紧邻实体 `kind` 徽章并列展示主分类徽章（`work.creation_form`、`agent.agent_type`、`collection.collection_type`、`event.event_type`、`release.edition_type`、`medium.format`、`content_unit.entry_role`）。
 
-### 八类实体分类与核心字段
+### 九类实体分类与核心字段
 
 | kind | 字段与类型 | 基准词项 / 取值 |
 | --- | --- | --- |
-| `agent` | `attributes.agent_type`（enum `agent_type`） | `person`（个人）、`group`（团体 / 组合）、`organization`（机构 / 公司）、`character`（虚构角色） |
+| `agent` | `attributes.agent_type`（enum `agent_type`）、`former_names`、`activity_periods` | `person`（个人）、`group`（团体 / 组合）、`organization`（机构 / 公司）、`character`（虚构角色）；曾用名与分段活跃期带起止日及 `ended` |
 | `collection` | `attributes.collection_type`（enum `collection_type`） | `franchise`（跨媒体企划）、`series`（作品系列）、`anthology`（选集 / 丛书）、`event_catalog`（展会 / 活动特辑） |
 | `work` | `attributes.creation_form`（enum `creation_form`） | 见下表 `creation_form` 词项 |
 | `content_unit` | `attributes.entry_role`（enum `entry_role`） | `main`（本篇）、`opening`（片头曲）、`ending`（片尾曲）、`trailer`（预告 / 宣传）、`extra`（其它附加）、`other`（其它） |
@@ -60,6 +61,7 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以八类固定实体、收录�
 | `release` | 独立正交枚举维度 + `attributes.publisher`（`entity -> agent`） | `edition_type`：`standard`（普通版）、`limited`（限定版）、`deluxe`（豪华版）、`boxset`（套盒）<br>`edition_batch`：`regular`（通常发行）、`first_press`（初回发行）、`reissue`（再版 / 重发）、`reprint`（重印）<br>`distribution_channel`：`mixed`（混合）、`physical`（实体）、`digital`（数字）、`web`（网络配信）<br>`packaging`：`standard`（标准包装）、`jewel`（Jewel Case）、`slipcase`（腰封 / 外封套）、`box`（盒装）、`boxset`（套盒）、`digipak`（Digipak） |
 | `medium` | `attributes.format`（enum `format`）+ `attributes.role` | `format`：`cd`、`bd`、`uhd_bd`、`dvd`、`vinyl`、`sacd`、`cassette`、`paper`、`digital`、`web` |
 | `track` | `attributes.role` + `Track.contents[]` | `role` 取内容用途词表，实际收录表达写入 `contents[]` |
+| `event` | `attributes.event_type`（enum `event_type`）、`venue`、`location`、`cancelled` | `concert`（演唱会）、`tour`（巡演）、`festival`（音乐节）、`convention`（展会 / 即卖会）、`stage`（舞台剧 / 朗读剧）、`broadcast_event`（特别节目 / 直播）、`award`（奖项 / 颁奖礼）、`exhibition`（展览）；单一作品/发行的发售或停售节点写内嵌 `events[]`（`event_kind` 取 `embedded_event_kind`） |
 
 ### 作品形态 `creation_form` 词表
 
@@ -128,7 +130,7 @@ Track 的 `contents[]` 是实际收录的权威来源：
 
 ## 关系
 
-语义关系记录来源端、目标端、关系码、位置及上下文属性。关系码、允许端点与约束由 `definitions.relations` 声明（站点管理员可扩展），下表列出 32 条平台基准种子语义关系。
+语义关系记录来源端、目标端、关系码、位置及时态上下文属性（`begin_date`、`end_date`、`ended`、`date_precision`、`earliest_date`、`latest_date` 等）。关系码、允许端点与约束由 `definitions.relations` 声明（站点管理员可扩展），下表列出 36 条平台基准种子语义关系。
 
 固定外键、`subjects`、`contents` 以及 `definitions` 声明的实体属性引用（支持嵌套 `group` / `list`）由各自拥有者维护；统一查询把结构、语义关系与属性引用投影为可遍历链接（全部规则见 `definitions.relationship_rules`），不重复存边。查询接口见[实体查询与详情](/api-entities)。
 
@@ -139,24 +141,24 @@ Track 的 `contents[]` 是实际收录的权威来源：
 | 关系码 | 正向 ↔ 反向名称 | `source_kinds -> target_kinds` | 适用边界与属性约定 |
 | --- | --- | --- | --- |
 | `created_by` | 原作 / 作者 ↔ 原作 / 著作 | `work\|content_unit\|expression\|release -> agent` | **仅限原作者、原案、著作人**；严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌 |
-| `produced_by` | 制作 / 出品 ↔ 制作了 | `work\|content_unit\|expression\|release -> agent` | 动画制作公司（`アニメーション制作`）、出品/制作委员会、制片人（`プロデューサー`）、音乐制作人、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）；原始职衔写 `credit_role`；发行版出版/发行商优先写 `Release.attributes.publisher` |
-| `directed_by` | 导演 ↔ 执导了 | `work\|content_unit\|expression -> agent` | 总导演、导演/监督、系列导演；分集演出无专用码时走 `credit_for` |
-| `written_by` | 编剧 ↔ 编写了 | `work\|content_unit\|expression -> agent` | 系列构成、脚本、剧本 |
+| `produced_by` | 制作 / 出品 ↔ 制作了 | `work\|content_unit\|expression\|release\|event -> agent` | 动画制作公司（`アニメーション制作`）、出品/制作委员会、制片人（`プロデューサー`）、音乐制作人、活动主办、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）；原始职衔写 `credit_role`；发行版出版/发行商优先写 `Release.attributes.publisher` |
+| `directed_by` | 导演 ↔ 执导了 | `work\|content_unit\|expression\|event -> agent` | 总导演、导演/监督、舞台演出；分集演出无专用码时走 `credit_for` |
+| `written_by` | 编剧 ↔ 编写了 | `work\|content_unit\|expression\|event -> agent` | 系列构成、脚本、剧本 |
 | `composed_by` | 作曲者 ↔ 作曲了 | `work\|content_unit\|expression -> agent` | 作曲、剧伴音乐作曲 |
 | `lyricist_of` | 作词者 ↔ 作词了 | `work\|content_unit\|expression -> agent` | 作词 |
 | `arranged_by` | 编曲者 ↔ 编曲了 | `work\|content_unit\|expression -> agent` | 编曲；通常落歌曲 `expression`，仅作品级来源明确时落 `work` |
-| `performed_by` | 表演者 ↔ 表演了 | `work\|content_unit\|expression\|release -> agent` | 演唱、演奏、乐队/组合表演；团体已知成员时，个人与团体用 `member_of` 关联（乐器/声部写 `credit_role`） |
-| `voiced_by` | 配音者 ↔ 配音于 | `work\|content_unit\|expression\|release\|agent -> agent` | 声优/配音；在作品/表达上带 `attributes.character` 与 `language`，也可在角色 `agent -> cv agent` 上记录固定声优 |
-| `character_in` | 角色登场 ↔ 登场角色 | `agent -> work\|collection` | `participant_slot=character`；虚构角色登场，番位写 `character_rank` |
-| `illustrated_by` | 插画者 ↔ 绘制了 | `work\|content_unit\|expression\|release -> agent` | 插画、角色原案、封面绘制、原画设计 |
+| `performed_by` | 表演者 ↔ 表演了 | `work\|content_unit\|expression\|release\|event -> agent` | 演唱、演奏、乐队/组合表演、现场公演；团体已知成员时，个人与团体用 `member_of` 关联（乐器/声部写 `credit_role`） |
+| `voiced_by` | 配音者 ↔ 配音于 | `work\|content_unit\|expression\|release\|agent\|event -> agent` | 声优/配音；在作品/表达/活动上带 `attributes.character` 与 `language`，也可在角色 `agent -> cv agent` 上记录声优任期 |
+| `character_in` | 角色登场 ↔ 登场角色 | `agent -> work\|collection\|event` | `participant_slot=character`；虚构角色登场，番位写 `character_rank` |
+| `illustrated_by` | 插画者 ↔ 绘制了 | `work\|content_unit\|expression\|release\|event -> agent` | 插画、角色原案、封面/活动主视觉绘制、原画设计 |
 | `developed_by` | 开发者 ↔ 开发了 | `work\|content_unit\|expression\|release -> agent` | 游戏/软件开发团队或程序开发 |
-| `photographed_by` | 摄影者 ↔ 拍摄了 | `work\|content_unit\|expression\|release -> agent` | 写真摄影、影像摄影监督 |
-| `modeled_by` | 出镜者 ↔ 出镜于 | `work\|content_unit\|expression\|release -> agent` | 写真模特、真人出镜演员 |
-| `narrated_by` | 朗读 / 旁白 ↔ 朗读了 | `work\|content_unit\|expression\|release -> agent` | 有声书朗读、旁白 |
+| `photographed_by` | 摄影者 ↔ 拍摄了 | `work\|content_unit\|expression\|release\|event -> agent` | 写真摄影、影像摄影监督、现场摄影 |
+| `modeled_by` | 出镜者 ↔ 出镜于 | `work\|content_unit\|expression\|release\|event -> agent` | 写真模特、真人出镜演员 |
+| `narrated_by` | 朗读 / 旁白 ↔ 朗读了 | `work\|content_unit\|expression\|release\|event -> agent` | 有声书朗读、旁白、现场朗读 |
 | `translated_by` | 译者 ↔ 翻译了 | `work\|content_unit\|expression\|release -> agent` | 文本或字幕翻译 |
-| `credit_for` | 参与主体 ↔ 参与记录 | `work\|content_unit\|expression\|release -> agent` | **兜底署名**：仅以上 16 条均不适用时使用（音响监督、美术监督、色彩设计、剪辑、分镜、单集演出、录音/混音工程等），必填 `credit_role` 原文；严禁与专用关系重复建边 |
+| `credit_for` | 参与主体 ↔ 参与记录 | `work\|content_unit\|expression\|release\|event -> agent` | **兜底署名**：仅以上 16 条均不适用时使用（音响监督、美术监督、色彩设计、剪辑、分镜、单集演出、录音/混音工程等），必填 `credit_role` 原文；严禁与专用关系重复建边 |
 
-### 创作关系组 `creative`（9 条，`acyclic=true`，`participant_slot=peer`）
+### 创作关系组 `creative`（10 条，`acyclic=true`，`participant_slot=peer`）
 
 | 关系码 | 正向 ↔ 反向名称 | `source_kinds -> target_kinds` |
 | --- | --- | --- |
@@ -169,13 +171,17 @@ Track 的 `contents[]` 是实际收录的权威来源：
 | `cover_of` | 翻唱自 ↔ 被翻唱为 | `expression -> expression` |
 | `alternate_take_of` | 别版取自 ↔ 被用作别版 | `expression -> expression` |
 | `pressing_of` | 再版自 ↔ 被再版为 | `release -> release` |
+| `recorded_at` | 录制 / 演出于 ↔ 现场收录作品 | `work\|content_unit\|expression -> event` |
 
-### 组成与成员组 `membership`（6 条）
+### 组成与成员组 `membership`（9 条）
 
 | 关系码 | 正向 ↔ 反向名称 | `source_kinds -> target_kinds` | 约束与用途 |
 | --- | --- | --- | --- |
-| `includes` | 组成包含 ↔ 组成属于 | `collection\|work -> work\|collection` | `aggregate=true`、`acyclic=true`；企划/系列收录各季动画、游戏、漫画、音乐作品，或专辑 Work 包含曲目 Work |
-| `member_of` | 所属团体 ↔ 成员 | `agent -> agent` | `acyclic=true`；个人成员指向乐队/组合/社团，担当位置写 `credit_role`，在籍期写 `begin_date` / `end_date` |
+| `includes` | 组成包含 ↔ 组成属于 | `collection\|work\|event -> work\|collection\|event` | `aggregate=true`、`acyclic=true`；企划/系列收录旗下作品，专辑 Work 包含曲目 Work，或巡演/大型展会 Event 包含分场次 Event |
+| `member_of` | 所属团体 ↔ 成员 | `agent -> agent` | `acyclic=true`；个人成员指向乐队/组合/社团，担当位置写 `credit_role`，在籍期写 `begin_date` / `end_date` / `ended` |
+| `subsidiary_of` | 上级机构 ↔ 下属机构 | `agent -> agent` | `acyclic=true`、`cycle_group=org_hierarchy`；子公司/内部厂牌指向上级机构，隶属区间写 `begin_date` / `end_date` / `ended` |
+| `succeeded_by` | 后继主体 ↔ 前身主体 | `agent -> agent` | `acyclic=true`、`cycle_group=agent_succession`；前身指向合并/收购/拆分/承继后的独立主体，`transition_type` 取 `rename`/`merger`/`acquisition`/`split`/`transfer` |
+| `released_at` | 首发 / 颁布于活动 ↔ 首发 / 颁布发行版 | `release -> event` | `acyclic=true`；展会、即卖会或演唱会现场首发/限定颁布的发行版指向对应活动 |
 | `expression_part` | 表达包含 ↔ 所属整体表达 | `expression -> expression` | `usage=expression_composition`、`scope=work`、`aggregate=true`、`unique_position=true`、`acyclic=true` |
 | `edition_of` | 发行组归属 ↔ 发行版本 | `release -> work\|collection` | `usage=release_group`、`max_outgoing=1` |
 | `bonus_included_in` | 特典收录于 ↔ 收录特典 | `expression -> release\|medium` | `acyclic=true` |

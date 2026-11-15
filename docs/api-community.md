@@ -36,7 +36,7 @@ group: "api"
 | `GET /api/favorites/mine` | 本人收藏，需登录 |
 | `GET /api/users/:id/favorites` | 用户收藏，检查所有者的公开设置并按访问者的实体可见性过滤 |
 
-target_type 为八种实体 kind。切换前验证目标种类与可见性，并用合并身份归一；目录依赖故障为 503，不能当作目标不存在。
+target_type 为九种实体 kind（含 `event`）。切换前验证目标种类与可见性，并用合并身份归一；目录依赖故障为 503，不能当作目标不存在。
 
 `/api/favorites/mine`、`/api/favorites/status` 与 `/api/favorites/toggle` 支持站内会话及合法 PAT。当前没有可授予第三方的收藏 OAuth scope，第三方 OAuth 或 ID token 调用这些接口返回 `403 forbidden`；公共收藏与统计接口按公开偏好处理第三方身份，即使 subject 与收藏所有者相同，也不享有本人豁免。
 
@@ -160,7 +160,7 @@ content_removed 要求先通过既有删除端点移除本地内容；仍存在�
 
 `GET /api/community/admin/favorites` 支持 `page/page_size` 和可选 `owner_id/target_type/target_id`，三个筛选按精确条件共同匹配。响应 `{items,total}`，每项为 `{owner_id,target_type,target_id,created_at}`。这是本地收藏原始记录台账，不依赖目录解析或目标当前可见性，因此能处置已删除或合并目标留下的记录；公开收藏接口继续按访问者的可见性过滤。
 
-`DELETE /api/community/admin/favorites?owner_id=<UUID>&target_type=<kind>&target_id=<UUID>` 要求三个键齐全，按复合身份精确删除，成功返回 204，不存在返回 404，并记录管理审计。`target_type` 为八种实体 kind；本接口不通过当前管理员的收藏切换操作代替删除他人记录。
+`DELETE /api/community/admin/favorites?owner_id=<UUID>&target_type=<kind>&target_id=<UUID>` 要求三个键齐全，按复合身份精确删除，成功返回 204，不存在返回 404，并记录管理审计。`target_type` 为九种实体 kind；本接口不通过当前管理员的收藏切换操作代替删除他人记录。
 
 ### 新建板块
 

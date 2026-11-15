@@ -9,7 +9,7 @@ group: "api"
 
 目录里所有实体走同一套端点：查询用 `GET /api/catalog/entities`，详情用 `GET /api/catalog/entities/:id`。
 
-八类 kind 共用这两个端点：`agent` / `collection` / `work` / `content_unit` / `expression` / `release` / `medium` / `track`。
+九类 kind 共用这两个端点：`agent` / `collection` / `work` / `content_unit` / `expression` / `release` / `medium` / `track` / `event`。
 按关联 id 过滤（`work_id` / `release_id` / `medium_id` / `content_unit_id` / `parent_id`）
 或按 `kind` / `tags` 过滤拿到子集；语义关系、结构与声明的实体引用可以经统一 links 或 relationships/query 读取，实际收录也可用 occurrences 反查。
 
@@ -122,9 +122,9 @@ GET /api/catalog/entities?kind=release&field=subject_attributes.seq&value=1
 
 题名归一化与近似召回：
 
-- **默认 `core_title` 索引匹配（`title_core`）**：除忽略大小写并合并空白的正式题名（`title_exact`）与别名（`alias`，含 `nonofficial` 译名及 `nonofficial_aliases`）匹配外，索引默认计算规范化 `core_title`——折叠全角 ASCII 与全角空白，剥离前后法人词缀（如 `株式会社`、`有限会社`、`Co., Ltd.`、`Inc.`）、末尾括号媒介修饰词（如 `(TVアニメ)`、`[CD]`、`【アニメ】`）及中点与标点符号（如 `Poppin'Party` ↔ `Poppin Party`），命中记入 `matched_fields: ["title_core"]`，默认 `recommended_action: "review"`。
+- **默认 `core_title` 索引匹配（`title_core`）**：除忽略大小写并合并空白的正式题名（`title_exact`）与别名（`alias`，含 `nonofficial` 译名、`nonofficial_aliases` 及主体的 `former_names[].name`）匹配外，索引默认计算规范化 `core_title`——折叠全角 ASCII 与全角空白，剥离前后法人词缀（如 `株式会社`、`有限会社`、`Co., Ltd.`、`Inc.`）、末尾括号媒介修饰词（如 `(TVアニメ)`、`[CD]`、`【アニメ】`）及中点与标点符号（如 `Poppin'Party` ↔ `Poppin Party`），命中记入 `matched_fields: ["title_core"]`，默认 `recommended_action: "review"`。
 - **近似题名召回（`include_approximate: true` -> `title_similar`）**：显式传 `include_approximate: true` 时，基于 `core_title` 额外召回子串包含与 `pg_trgm`（`word_similarity >= 0.6`）近似候选，命中记入 `matched_fields: ["title_similar"]`，无冲突时 `recommended_action: "review"`。
-- **主分类冲突（`conflicts` -> `distinct`）**：当请求 `attributes` 传入主分类字段（`agent_type`、`creation_form`、`collection_type`）且候选实体该字段也非空但值不同时，`assessment.conflicts` 记录 `agent_type_mismatch`、`creation_form_mismatch` 或 `collection_type_mismatch`（`context_summary` 同时回显候选的主分类值），并将 `recommended_action` 设为 `"distinct"`（如区分同名 `song` 与 `original_album`）。
+- **主分类冲突（`conflicts` -> `distinct`）**：当请求 `attributes` 传入主分类字段（`agent_type`、`creation_form`、`collection_type`、`event_type`）且候选实体该字段也非空但值不同时，`assessment.conflicts` 记录 `agent_type_mismatch`、`creation_form_mismatch`、`collection_type_mismatch` 或 `event_type_mismatch`（`context_summary` 同时回显候选的主分类值），并将 `recommended_action` 设为 `"distinct"`（如区分同名 `song` 与 `original_album`）。
 
 可选 `context`（`creator`、`performer`、`label` 为主体 UUID 数组，`catalog_number` 为品番字符串数组，每项最多 20 个）仅用于计算置信度与排序，**从不缩减候选集**——同名但不同作者或厂牌的实体仍会返回。每条命中附带参考评估 `assessment: {matched_fields, conflicts?, context_summary?, confidence, recommended_action}`，`recommended_action` 取 `reuse` / `review` / `distinct`，仅供辅助判断，服务端不会自动合并。
 
@@ -163,7 +163,7 @@ GET /api/catalog/entities/:id/revisions  # 修订历史
 
 `POST /api/catalog/entities/identity` 是只读批量解析，请求 `{ids:[...]}`，1–500 项，返回按请求 ID 索引的 `items` 与 `missing`。不可见/不存在进入 missing，数据库故障使整批失败。
 
-`GET /api/catalog/entities/:id/links?limit=50&offset=0` 返回 `{subject_id, definition_etag, items, entities, limit, offset, has_more}`，支持可选筛选查询参数 `direction`（`both` / `outgoing` / `incoming`）、`classes`（`ownership` / `placement` / `inclusion` / `semantic` / `reference`，逗号分隔或重复传参）、`rule_codes` 与 `peer_kinds`。指定 `classes` 时服务端直接跳过无关的关系表扫描（例如详情页只读语义关系与字段引用时传 `classes=semantic,reference`）。每项有 key、rule_code、class、direction、两端 ID、排序及可选角色、定位和属性。普通语义关系的 key 是关系 ID，version 是当前编辑版本；结构与字段引用没有独立可写版本，仍修改其权威字段。
+`GET /api/catalog/entities/:id/links?limit=50&offset=0` 返回 `{subject_id, definition_etag, items, entities, limit, offset, has_more}`，支持可选筛选查询参数 `direction`（`both` / `outgoing` / `incoming`）、`classes`（`ownership` / `placement` / `inclusion` / `semantic` / `reference`，逗号分隔或重复传参）、`rule_codes`、`peer_kinds`、`active_only=1|true`（排除 `ended=true` 或已填 `end_date`/`latest_date` 的语义关系）与 `as_of=YYYY[-MM[-DD]]`（按指定时点过滤语义关系有效区间；结构边与属性引用不受时态裁剪）。指定 `classes` 时服务端直接跳过无关的关系表扫描（例如详情页只读语义关系与字段引用时传 `classes=semantic,reference`）。每项有 key、rule_code、class、direction、两端 ID、排序及可选角色、定位和属性。普通语义关系的 key 是关系 ID，version 是当前编辑版本；结构与字段引用没有独立可写版本，仍修改其权威字段。
 
 规则从 `definitions.relationship_rules` 发现，覆盖以下事实：
 
@@ -189,6 +189,8 @@ Content-Type: application/json
   "ids": ["<release_uuid>", "<expression_uuid>"],
   "direction": "both",
   "classes": ["semantic", "reference"],
+  "active_only": true,
+  "as_of": "2020-05",
   "limit": 25,
   "offset": 0
 }
@@ -200,7 +202,9 @@ Content-Type: application/json
 | `direction` | both（默认）、outgoing 或 incoming，相对于每个主体 |
 | `classes` | 可选数组，按关系类别（`ownership` / `placement` / `inclusion` / `semantic` / `reference`）裁剪查询分支；多个类别命中任一 |
 | `rule_codes` | 可选数组，当前关系注册表中的完整码，例如 `structure:track_content`；多个码为命中任一 |
-| `peer_kinds` | 可选数组，八类 kind 的对端筛选；多个 kind 为命中任一 |
+| `peer_kinds` | 可选数组，九类 kind 的对端筛选；多个 kind 为命中任一 |
+| `active_only` | 可选布尔值；为 `true` 时排除 `ended=true` 或带 `end_date`/`latest_date` 的语义关系 |
+| `as_of` | 可选部分日期（`YYYY` / `YYYY-MM` / `YYYY-MM-DD`）；按指定时点过滤语义关系起止区间（非法格式返回 `400 invalid_as_of`） |
 | `limit` | 每个主体的页大小，默认 25，范围 1–100 |
 | `offset` | 每个主体的偏移，默认 0，须为非负整数，无 10000 上限 |
 
@@ -253,13 +257,13 @@ POST /api/catalog/expressions/details
 | `GET /api/catalog/entities/{id}/quality` | 单条只读诊断；可见性与实体详情相同 |
 | `POST /api/catalog/quality/batch` | `{"ids":["<UUID>"]}`，1–100 个实体；返回 `reports[]` 和按 ID 记录的 `errors`，单项失败不代表全批失败 |
 | `GET /api/catalog/entities/stats` | 按生命周期统计条目，需要 `catalog.lifecycle.manage`；包括 deleted/merged，不能作为匿名探索页总数 |
-| `GET /api/catalog/stats` | 公开 active 实体的总量、图片与标签覆盖数，按八种 kind 分组，无需生命周期管理权限 |
+| `GET /api/catalog/stats` | 公开 active 实体的总量、图片与标签覆盖数，按九种 kind 分组，无需生命周期管理权限 |
 
 质量报告包含 `entity_id`、`kind`、`status`、`issues[]`、`checks[]` 和定义版本。`status` 为 `complete` / `partial` / `needs_verification`；`checks` 声明实际检查覆盖面。质量诊断可选，只提供建议，不是编辑、提交或应用的前置条件，诊断结果不会阻断这些操作；它不是人工审核结论，不会修改条目或赋予免审资格。
 
 ## 词表、标签、货架与对比
 
-`GET /api/catalog/stats` 在同一数据库快照内返回 `total`、`with_pictures`、`with_tags` 与 `kinds`。前三项分别是 active 实体总数、pictures 非空的实体数、tags 非空的实体数；`kinds` 始终包含八种实体类型，每项具有相同三项计数，空类型补 0。只需要数量或覆盖率时使用此接口；按标签的频次继续读 `/tags`，不必遍历实体列表或逐标签查询来计算 tagged-entity 总数。该接口遵守目录读取限流。
+`GET /api/catalog/stats` 在同一数据库快照内返回 `total`、`with_pictures`、`with_tags` 与 `kinds`。前三项分别是 active 实体总数、pictures 非空的实体数、tags 非空的实体数；`kinds` 始终包含九种实体类型，每项具有相同三项计数，空类型补 0。只需要数量或覆盖率时使用此接口；按标签的频次继续读 `/tags`，不必遍历实体列表或逐标签查询来计算 tagged-entity 总数。该接口遵守目录读取限流。
 
 | 端点 | 用途 |
 |---|---|
