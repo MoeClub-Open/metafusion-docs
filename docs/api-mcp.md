@@ -23,7 +23,7 @@ MCP 与[技能仓库](https://github.com/MoeclubM/metafusion-skills)提供的是
 
 打开开发者中心 `/developer?tab=mcp` 的「MCP 授权」页，复制地址、查看连接、打开权限编辑弹窗或撤销连接；API Key 在独立页签管理。扩大权限需要在客户端重新授权。OAuth 同意页仍由 MCP 服务提供，`/mcp/manage` 转到开发者中心。工具沿用 API 的权限、数据可见性和审计，不能获得账号本身没有的权限。
 
-客户端配置使用 OAuth、动态客户端注册（DCR）与实例的 `/mcp` 地址；关闭 OIDC（若客户端提供此选项）。MCP 不提供 OIDC 身份服务或 ID token。对客户端附加的 `openid`、`email`、`profile`，授权流程只授予用户选择的平台权限，令牌响应的 `scope` 返回实际授予范围；这些身份 scope 不会进入 API 凭据。未知的业务 scope 仍会被拒绝。
+客户端配置使用 OAuth、动态客户端注册（DCR）与实例的 `/mcp` 地址；关闭 OIDC（若客户端提供此选项）。MCP 不提供 OIDC 身份服务或 ID token。OAuth 授权按 RFC 6749 §3.3 将客户端请求（包括附加的 `openid`、`email`、`profile` 或连接器缓存的旧版 `scopes_supported`）收敛到当前支持列表，仅展示并授予用户勾选的支持权限，令牌响应的 `scope` 返回实际授予范围；若收敛后没有任何可授权限，返回 `400 invalid_scope`。刷新令牌轮换前校验上游委托凭据状态，凭据已吊销或失效时直接返回 `400 invalid_grant`，避免客户端刷新成功却无法调用 `/mcp`。
 
 DCR 允许匿名注册第三方 HTTPS 回调（本地开发允许回环 HTTP），不代表应用获得站点核验或授权。注册按真实连接对端限流（每进程每分钟 180 次，经同一反代的请求共用预算）。客户端名称由注册者提供，请在同意页核对完整回调地址与所选权限；只有站内会话明确批准后才签发绑定该回调的授权码，换码还须匹配 PKCE S256 verifier。允许第三方回调本身不是绕过授权。
 
