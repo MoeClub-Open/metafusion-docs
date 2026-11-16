@@ -98,7 +98,7 @@ group: "api"
 
 `background=true` 在校验并封存请求后立即返回 `200`，其中 `status="pending"`，同时服务端在独立后台上下文继续执行（最长 5 分钟），每完成一轮模型或工具调用即实时保存进度到会话 `messages` 与 `chat_requests.response`。会话在后台执行期间携带 `active_request_id`，调用方可通过 `GET /conversations/:id` 读取最新消息与工具调用进度，并通过 `GET /requests/:id` 查询最终状态、用量和 `push_receipts`。
 
-工具可读取定义、实体、身份候选、关系、工作副本、网页搜索和公开来源，修改统一在服务器工作副本中 stage、commit、push。查询工具支持按需筛选字段与语种以节省上下文（`catalog_search` 支持 `fields`；`catalog_get` 支持 `fields`、`locales`、`attribute_keys`、`include_body`；`catalog_relationships` 支持 `classes` 与 `include_entities`；`catalog_definitions` 支持可选 `codes` 与 `locale`；`external_source_query` 支持可选 `source`、`include_raw`、`include_preview`；`catalog_workspace_*` 默认精简重复的快照载荷）。普通账号发起 PR，免审账号可直接合入；不要求来源池、source_refs 或查证记录。工具轮数由站点配置为 1–24（默认 12），每轮最多 8 次工具调用；当工具轮次执行完毕且尚未生成最终文本时，服务端自动追加一轮无工具的总结回合（或根据 `push_receipts` 生成保底变更摘要），输出完整的操作总结与实体链接。达到限制或后续上游失败时，响应仍保留已经发生的提交回执和用量，调用方必须同时检查 `error` 与 `push_receipts`，不能把整轮当作未写入。
+对话新会话默认仅加载 12 个核心检索、外部来源与自主任务工具（含 `assistant_load_tools`）及核心系统提示，需要身份候选查重、工作副本编辑、合并请求协作或版本历史操作时，助手可按需调用 `assistant_load_tools`（支持与只读工具同轮并行调用，纯加载轮次不占用有效工具轮数上限）解锁 `edit`、`pr`、`version` 工具组并在当前会话后续轮次自动保持对应工具与编目规则。修改统一在服务器工作副本中 stage、commit、push；查询工具支持按需筛选字段与语种以节省上下文（`catalog_search` 支持 `fields`；`catalog_get` 支持 `fields`、`locales`、`attribute_keys`、`include_body`；`catalog_relationships` 支持 `classes` 与 `include_entities`；`catalog_definitions` 支持可选 `codes` 与 `locale`；`external_source_query` 支持可选 `source`、`include_raw`、`include_preview`；`catalog_workspace_*` 默认精简重复的快照载荷）。普通账号发起 PR，免审账号可直接合入；不要求来源池、source_refs 或查证记录。工具轮数由站点配置为 1–24（默认 12），每轮最多 8 次工具调用；当工具轮次执行完毕且尚未生成最终文本时，服务端自动追加一轮无工具的总结回合（或根据 `push_receipts` 生成保底变更摘要），输出完整的操作总结与实体链接。达到限制或后续上游失败时，响应仍保留已经发生的提交回执和用量，调用方必须同时检查 `error` 与 `push_receipts`，不能把整轮当作未写入。
 
 `catalog_candidates` 查重工具默认覆盖 `core_title` 规范化匹配（`title_core`），并支持可选布尔参数 `include_approximate`（传入 `titles` 时默认 `true`，召回子串与 `pg_trgm` 近似候选 `title_similar`，显式传 `false` 可关闭）、主分类 `attributes` 冲突检测（`agent_type_mismatch` / `creation_form_mismatch` / `collection_type_mismatch` -> `distinct`）及 `context`。工作副本协议不要求提交 `reviewed_candidate_ids`，但助手与后台 Worker（含 `edit` 子代理）在新建任何实体前必须先调用 `catalog_candidates` 执行近似查重；命中 `reuse` 或 `review` 候选时须结合 `assessment` 并用 `catalog_get` / `catalog_relationships` 核查候选详情与关系，确认是独立实体后再新建。
 
@@ -132,7 +132,7 @@ group: "api"
 
 ## Token、价格与预算
 
-`POST /context` 免费预览下一轮上下文，使用本人登录身份。请求为必填 `model_id`（站点模型或本人自备模型），以及可选 `conversation_id`、`message`（未发送草稿，最多 32768 个 UTF-8 字节）。会话只能属于本人；响应包含 `input_tokens_bound`、`context_window`、`max_output_tokens`、`message_count`、`tool_count`、`estimated=true`。输入上界包含最新系统提示、已保存消息、草稿、工具定义及协议开销，与实际调用的上限判据共用实现。预览不保存草稿、不调用模型、不预留或消耗积分。
+`POST /context` 免费预览下一轮上下文，使用本人登录身份。请求为必填 `model_id`（站点模型或本人自备模型），以及可选 `conversation_id`、`message`（未发送草稿，最多 32768 个 UTF-8 字节）。会话只能属于本人；响应包含 `input_tokens_bound`、`context_window`、`max_output_tokens`、`message_count`、`tool_count`、`estimated=true`。输入上界与 `tool_count` 反映当前会话实际已激活的系统提示与工具集，与实际调用的上限判据共用实现。预览不保存草稿、不调用模型、不预留或消耗积分。
 
 `usage` 包含 `input_tokens`、`output_tokens`、`cached_input_tokens`，缓存输入是输入总量的一部分，不能再相加作为总 token。用量记录保存 `price_snapshot`、`byo_provider_id`、`credits`、`cost_microusd`、`status`、`usage_estimated` 与结算时间，之后修改模型费率不改写历史结算。
 
