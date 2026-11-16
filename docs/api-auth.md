@@ -41,7 +41,7 @@ DELETE /api/auth/tokens/{id}             # 需登录：删除列表记录并撤�
 POST   /api/auth/tokens/introspect       # 下游服务内部调用，不是给用户调的
 ```
 
-MCP 通过独立的 `POST /api/auth/mcp-tokens` 建立委托凭据（每账号最多 50 个有效凭据），`PATCH /api/auth/mcp-tokens/{id}` 仅缩减权限，`DELETE /api/auth/mcp-tokens/{id}` 撤销。三者均要求本人站内会话，不能由 PAT 或第三方 OAuth 自行创建、编辑或撤销。`mcp.connect` 仅供此类凭据标识身份。内部共用高熵令牌的哈希存储和内省，不复用用户的个人 API Key。
+MCP 通过独立的 `POST /api/auth/mcp-tokens` 建立委托凭据（每账号最多 50 个有效凭据），`PATCH /api/auth/mcp-tokens/{id}` 在本人可委托权限范围内调整权限，`DELETE /api/auth/mcp-tokens/{id}` 撤销。三者均要求本人站内会话，不能由 PAT 或第三方 OAuth 自行创建、编辑或撤销。`mcp.connect` 仅供此类凭据标识身份。内部共用高熵令牌的哈希存储和内省，不复用用户的个人 API Key。
 
 个人密钥管理也仅接受站内会话。请求显式提供 `Authorization` 时以该凭据为准，拒绝后不会回退浏览器 Cookie；把 PAT 放入 `mf_session` 也不能获得会话权限。
 
@@ -258,7 +258,7 @@ GET /api/users/{id}   # 匿名可读：某账号的公开资料
 
 ### 全站凭据与 OAuth 台账
 
-`GET /api/admin/credentials` 跨用户列出个人 API Key/PAT 与 MCP 委托凭据，可按 `owner_id`、`kind=pat|mcp`、`status=active|revoked|expired|disabled` 筛选。`PATCH /api/admin/credentials/:id` 修改 `name/scopes`，`POST .../:id/revoke` 撤销并保留记录，`DELETE .../:id` 删除。管理写操作要求站内会话，继续校验管理者、凭据所有者和原授权范围；MCP 权限只能缩减。
+`GET /api/admin/credentials` 跨用户列出个人 API Key/PAT 与 MCP 委托凭据，可按 `owner_id`、`kind=pat|mcp`、`status=active|revoked|expired|disabled` 筛选。`PATCH /api/admin/credentials/:id` 修改 `name/scopes`，`POST .../:id/revoke` 撤销并保留记录，`DELETE .../:id` 删除。管理写操作要求站内会话，继续校验管理者与凭据所有者的当前可委托权限范围。
 
 OAuth 台账需要 `auth.oauth.manage`：
 
