@@ -3,7 +3,34 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMarkdownRenderer } from 'vitepress';
-import { pageRedirects } from '../docs/.vitepress/redirects.mjs';
+import { pageRedirects } from '../docs/.vitepress/redirects.ts';
+
+interface HeroAction {
+  link?: string;
+}
+
+interface FrontmatterFields {
+  layout?: string;
+  title?: string;
+  description?: string;
+  group?: string;
+  order?: number;
+  hero?: { actions?: HeroAction[] };
+  features?: HeroAction[];
+}
+
+interface MarkdownEnv {
+  frontmatter?: FrontmatterFields;
+  links?: string[];
+  content?: string;
+}
+
+interface CheckedPage {
+  file: string;
+  fields: FrontmatterFields;
+  anchors: Set<string>;
+  links: string[];
+}
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const docsDir = join(root, 'docs');
@@ -11,31 +38,31 @@ const config = readFileSync(join(docsDir, '.vitepress', 'config.mts'), 'utf8');
 const groups = [...config.matchAll(/\{\s*key:\s*'([a-z-]+)'\s*,\s*label:/g)].map((m) => m[1]);
 if (!groups.length) throw new Error('check-nav: 无法读取分区清单，请同步检查配置与校验器。');
 
-const problems = [];
-const add = (file, message) => problems.push(`${file}: ${message}`);
+const problems: string[] = [];
+const add = (file: string, message: string) => problems.push(`${file}: ${message}`);
 const files = readdirSync(docsDir).filter((file) => file.endsWith('.md'));
-const pages = new Map();
-const seen = new Map();
+const pages = new Map<string, CheckedPage>();
+const seen = new Map<string, string>();
 const md = await createMarkdownRenderer(docsDir);
 let checkedLinks = 0;
 
 for (const file of files) {
   const raw = readFileSync(join(docsDir, file), 'utf8').replace(/\r\n/g, '\n');
-  const env = {};
+  const env: MarkdownEnv = {};
   const html = md.render(raw, env);
   const fields = env.frontmatter ?? {};
   const slug = file.replace(/\.md$/, '');
   const anchors = new Set([...html.matchAll(/<h[1-6][^>]*\bid="([^"]+)"/g)].map((m) => m[1]));
   const links = [...(env.links ?? [])];
   if (fields.layout === 'home') {
-    links.push(...(fields.hero?.actions ?? []).map((item) => item.link).filter(Boolean));
-    links.push(...(fields.features ?? []).map((item) => item.link).filter(Boolean));
+    links.push(...(fields.hero?.actions ?? []).map((item) => item.link).filter((link): link is string => Boolean(link)));
+    links.push(...(fields.features ?? []).map((item) => item.link).filter((link): link is string => Boolean(link)));
   } else {
     if (!/^---\n/.test(raw)) add(file, '缺 frontmatter');
     if (!fields.title) add(file, '缺 title');
     if (!fields.description) add(file, '缺 description');
-    if (!groups.includes(fields.group)) add(file, `未声明的 group "${fields.group ?? ''}"`);
-    if (!Number.isInteger(fields.order) || fields.order < 0) add(file, 'order 必须是非负整数');
+    if (!fields.group || !groups.includes(fields.group)) add(file, `未声明的 group "${fields.group ?? ''}"`);
+    if (typeof fields.order !== 'number' || !Number.isInteger(fields.order) || fields.order < 0) add(file, 'order 必须是非负整数');
     const key = `${fields.group}:${fields.order}`;
     if (seen.has(key)) add(file, `order 与 ${seen.get(key)} 重号`);
     else seen.set(key, file);
@@ -53,8 +80,8 @@ for (const group of groups) {
 }
 
 for (const [from, to] of Object.entries(pageRedirects)) {
-  if (pages.has(from)) add('redirects.mjs', `旧页面 ${from} 仍有重复正文`);
-  if (!pages.has(to)) add('redirects.mjs', `跳转 ${from} 指向不存在的页面 ${to}`);
+  if (pages.has(from)) add('redirects.ts', `旧页面 ${from} 仍有重复正文`);
+  if (!pages.has(to)) add('redirects.ts', `跳转 ${from} 指向不存在的页面 ${to}`);
 }
 
 for (const [slug, page] of pages) {

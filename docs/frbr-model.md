@@ -35,8 +35,8 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以九类固定实体、收录�
 | `title` / `original_language` | 基础题名与原始语言 |
 | `translations` | 按语言标签分组的对象，各项含 `title`、可选 `nonofficial`（仅非原始语种可标记非官方译名）、简短纯文本 `summary`、Markdown 条目正文 `body`、`aliases` 与 `nonofficial_aliases`；正文与实体共同修订 |
 | `attributes` | 动态属性，允许键及适用种类由 definitions 决定 |
-| `external_links` | 外部权威链接数组（kind/url/可选 external_id 与 role） |
-| `pictures` | 有序图片引用及来源；首项为封面，时间信息不改变顺序 |
+| `external_links` | 外部权威链接数组（`kind`/`url`/可选 `external_id`、`role`、`[valid_from, valid_to)`、`ended`、地区/平台/渠道/`release_id` 适用范围与 `recorded_at`） |
+| `pictures` | 追加式有序图片引用及来源；首项为当前默认封面，每项可带 `role`（含 `app_icon`）、`[valid_from, valid_to)`、地区/平台/渠道/`release_id` 范围、`pinned` 与 `recorded_at` |
 | `medium_formats` | 仅 `release` 读取响应附带的只读投影，按活动子 `medium` 聚合各 `format` 词条数量，不落库 |
 | `created_by` / `created_at` / `updated_at` | 创建者与时间 |
 | `redirect_id` | 合并后的目标，由生命周期操作维护 |
@@ -53,15 +53,15 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以九类固定实体、收录�
 
 | kind | 字段与类型 | 基准词项 / 取值 |
 | --- | --- | --- |
-| `agent` | `attributes.agent_type`（enum `agent_type`）、`former_names`、`activity_periods` | `person`（个人）、`group`（团体 / 组合）、`organization`（机构 / 公司）、`character`（虚构角色）；曾用名与分段活跃期带起止日及 `ended` |
-| `collection` | `attributes.collection_type`（enum `collection_type`） | `franchise`（跨媒体企划）、`series`（作品系列）、`anthology`（选集 / 丛书）、`event_catalog`（展会 / 活动特辑） |
-| `work` | `attributes.creation_form`（enum `creation_form`） | 见下表 `creation_form` 词项 |
-| `content_unit` | `attributes.entry_role`（enum `entry_role`） | `main`（本篇）、`opening`（片头曲）、`ending`（片尾曲）、`trailer`（预告 / 宣传）、`extra`（其它附加）、`other`（其它） |
-| `expression` | `attributes.version_label`（text）、`isrc`、`duration`、`language` | `version_label` 为自由文本（如录音室版、现场版、伴奏、导演剪辑） |
-| `release` | 独立正交枚举维度 + `attributes.publisher`（`entity -> agent`） | `edition_type`：`standard`（普通版）、`limited`（限定版）、`deluxe`（豪华版）、`boxset`（套盒）<br>`edition_batch`：`regular`（通常发行）、`first_press`（初回发行）、`reissue`（再版 / 重发）、`reprint`（重印）<br>`distribution_channel`：`mixed`（混合）、`physical`（实体）、`digital`（数字）、`web`（网络配信）<br>`packaging`：`standard`（标准包装）、`jewel`（Jewel Case）、`slipcase`（腰封 / 外封套）、`box`（盒装）、`boxset`（套盒）、`digipak`（Digipak） |
-| `medium` | `attributes.format`（enum `format`）+ `attributes.role` | `format`：`cd`、`bd`、`uhd_bd`、`dvd`、`vinyl`、`sacd`、`cassette`、`paper`、`digital`、`web` |
-| `track` | `attributes.role` + `Track.contents[]` | `role` 取内容用途词表，实际收录表达写入 `contents[]` |
-| `event` | `attributes.event_type`（enum `event_type`）、`venue`、`location`、`cancelled` | `concert`（演唱会）、`tour`（巡演）、`festival`（音乐节）、`convention`（展会 / 即卖会）、`stage`（舞台剧 / 朗读剧）、`broadcast_event`（特别节目 / 直播）、`award`（奖项 / 颁奖礼）、`exhibition`（展览）；单一作品/发行的发售或停售节点写内嵌 `events[]`（`event_kind` 取 `embedded_event_kind`） |
+| `agent` | `attributes.agent_type`（enum `agent_type`）、`former_names`、`activity_periods`、`attribute_history` | `person`（个人）、`group`（团体 / 组合）、`organization`（机构 / 公司）、`character`（虚构角色）；曾用名、分段活跃期与任意属性历史均支持 `[valid_from, valid_to)` 及范围 |
+| `collection` | `attributes.collection_type`（enum `collection_type`）、`former_names`、`attribute_history` | `franchise`（跨媒体企划）、`series`（作品系列）、`anthology`（选集 / 丛书）、`event_catalog`（展会 / 活动特辑） |
+| `work` | `attributes.creation_form`（enum `creation_form`）、`former_names`、`attribute_history` | 见下表 `creation_form` 词项；只保存跨市场共用的作品身份与创作/开发关系 |
+| `content_unit` | `attributes.entry_role`（enum `entry_role`）、`former_names`、`attribute_history` | `main`（本篇）、`opening`（片头曲）、`ending`（片尾曲）、`trailer`（预告 / 宣传）、`extra`（其它附加）、`other`（其它） |
+| `expression` | `attributes.version_label`（text）、`isrc`、`duration`、`language`、`former_names`、`attribute_history` | `version_label` 为自由文本（如录音室版、现场版、伴奏、导演剪辑） |
+| `release` | 正交枚举维度 + `release_status` + `publisher` / `operator`（`entity -> agent`）+ `former_names` / `attribute_history` | `edition_type`：`standard`、`limited`、`deluxe`、`boxset`<br>`edition_batch`：`regular`、`first_press`、`reissue`、`reprint`<br>`distribution_channel`：`mixed`、`physical`、`digital`、`web`<br>`release_status`：`announced`、`testing`、`released`、`operating`、`suspended`、`service_ended`、`discontinued`<br>`packaging`：`standard`、`jewel`、`slipcase`、`box`、`boxset`、`digipak`<br>多发行商/运营商或主体更替配合 `published_by` / `operated_by` 关系记录 |
+| `medium` | `attributes.format`（enum `format`）+ `attributes.role`、`former_names`、`attribute_history` | `format`：`cd`、`bd`、`uhd_bd`、`dvd`、`vinyl`、`sacd`、`cassette`、`paper`、`digital`、`web` |
+| `track` | `attributes.role` + `Track.contents[]`、`former_names`、`attribute_history` | `role` 取内容用途词表，实际收录表达写入 `contents[]` |
+| `event` | `attributes.event_type`（enum `event_type`）、`venue`、`location`、`cancelled`、`target_ids`、`related_assets`、`former_names`、`attribute_history` | 活动与里程碑词项：`concert`、`tour`、`festival`、`convention`、`stage`、`broadcast_event`、`award`、`exhibition` 及 `announcement`、`testing`、`official_release`、`version_update`、`visual_change`、`rename`、`publisher_change`、`operator_change`、`service_end`、`service_resume`、`major_event`；单实体节点可写内嵌 `events[]`（`event_kind` 取 `embedded_event_kind`） |
 
 ### 作品形态 `creation_form` 词表
 
@@ -82,7 +82,7 @@ MetaFusion 借用 IFLA LRM 的分层思想，并以九类固定实体、收录�
 | `release_role` | `Release.subjects[].role` | `primary`（主作品）、`track_work`（曲目作品）、`compilation`（汇编作品）、`supplement`（附加作品） |
 | `role` | `Medium` / `Track` / 关系属性 | `primary`（主要内容）、`supplement`（附加内容）、`side`（唱片面）、`extra`（额外收录）、`commentary`（解说音轨） |
 | `character_rank` | 关系属性（角色番位） | `main`（主角）、`supporting`（配角）、`guest`（客串 / 单集登场）、`ensemble`（群像）、`narrator`（旁白）、`cameo`（彩蛋登场） |
-| `picture_role` | `pictures[].role`（首项恒为封面） | `key_visual`（主视觉）、`cover_art`（封面图）、`back_cover`（封底）、`booklet`（手册内页）、`disc_art`（盘面 / 载体图）、`obi`（侧标 / 腰封）、`packaging`（包装实拍）、`poster`（海报）、`character_portrait`（角色立绘）、`person_portrait`（人物肖像）、`logo`（标识）、`scene_still`（剧照 / 场景图）、`event_photo`（活动现场）、`scan`（内页扫描）、`screenshot`（界面截图） |
+| `picture_role` | `pictures[].role`（首项为当前默认封面） | `key_visual`（主视觉）、`cover_art`（封面图）、`app_icon`（应用图标）、`logo`（标识）、`back_cover`（封底）、`booklet`（手册内页）、`disc_art`（盘面 / 载体图）、`obi`（侧标 / 腰封）、`packaging`（包装实拍）、`poster`（海报）、`character_portrait`（角色立绘）、`person_portrait`（人物肖像）、`scene_still`（剧照 / 场景图）、`event_photo`（活动现场）、`scan`（内页扫描）、`screenshot`（界面截图） |
 | `credit_role` | 关系属性（自由文本） | 保存来源中的原始职衔文本（如 `アニメーション制作`、`シリーズ構成`、`Vo. & Gt.`），仅作修饰，绝不替代专用关系码 |
 
 ## 固定归属
@@ -130,18 +130,20 @@ Track 的 `contents[]` 是实际收录的权威来源：
 
 ## 关系
 
-语义关系记录来源端、目标端、关系码、位置及时态上下文属性（`begin_date`、`end_date`、`ended`、`date_precision`、`earliest_date`、`latest_date` 等）。关系码、允许端点与约束由 `definitions.relations` 声明（站点管理员可扩展），下表列出 36 条平台基准种子语义关系。
+语义关系记录来源端、目标端、关系码、位置及时态与范围属性（`valid_from`、`valid_to`、`begin_date`、`end_date`、`ended`、`date_precision`、`earliest_date`、`latest_date`、`region`、`platform`、`channel`、`scoped_release` 等）。关系码、允许端点与约束由 `definitions.relations` 声明（站点管理员可扩展），下表列出 38 条平台基准种子语义关系。
 
 固定外键、`subjects`、`contents` 以及 `definitions` 声明的实体属性引用（支持嵌套 `group` / `list`）由各自拥有者维护；统一查询把结构、语义关系与属性引用投影为可遍历链接（全部规则见 `definitions.relationship_rules`），不重复存边。查询接口见[实体查询与详情](/api-entities)。
 
-### 署名组 `credits`（17 条，`counts_as_credit=true`）
+### 署名组 `credits`（19 条，`counts_as_credit=true`）
 
-署名边界硬规：`created_by` **仅限原作者、原案、著作人**，严禁用于动画公司、社团、游戏厂商或厂牌；制作公司、委员会、制片人、同人社团、游戏厂商使用 `produced_by`（发行版出版/发行商优先填 `Release.attributes.publisher`）；`credit_for` 仅在其余 16 条专用关系均不适用时作兜底，必须填 `credit_role` 原文，严禁与专用署名关系对同一职责重复建边。
+署名边界硬规：`created_by` **仅限原作者、原案、著作人**，严禁用于动画公司、社团、游戏厂商或厂牌；研发团队挂 `developed_by`；制作公司、委员会、制片人、同人社团、原作出品方使用 `produced_by`；特定地区或版本的发行商、运营商挂对应 `release` 的 `published_by` / `operated_by`（并维护主字段 `publisher` / `operator`），不混入 `work.produced_by`；`credit_for` 仅在其余 18 条专用关系均不适用时作兜底，必须填 `credit_role` 原文，严禁与专用署名关系对同一职责重复建边。
 
 | 关系码 | 正向 ↔ 反向名称 | `source_kinds -> target_kinds` | 适用边界与属性约定 |
 | --- | --- | --- | --- |
 | `created_by` | 原作 / 作者 ↔ 原作 / 著作 | `work\|content_unit\|expression\|release -> agent` | **仅限原作者、原案、著作人**；严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌 |
-| `produced_by` | 制作 / 出品 ↔ 制作了 | `work\|content_unit\|expression\|release\|event -> agent` | 动画制作公司（`アニメーション制作`）、出品/制作委员会、制片人（`プロデューサー`）、音乐制作人、活动主办、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）；原始职衔写 `credit_role`；发行版出版/发行商优先写 `Release.attributes.publisher` |
+| `produced_by` | 制作 / 出品 ↔ 制作了 | `work\|content_unit\|expression\|release\|event -> agent` | 动画制作公司（`アニメーション制作`）、出品/制作委员会、制片人（`プロデューサー`）、音乐制作人、活动主办、同人社团（`サークル`）、游戏品牌/出品方；原始职衔写 `credit_role`，特定市场发行/运营不挂 `work.produced_by` |
+| `published_by` | 发行商 ↔ 发行了 | `release -> agent` | 发行版的出版商、联合发行商或历史发行主体；配合 `valid_from`/`valid_to`/`region`/`platform`/`channel` 记录更替，主发行商同步填 `Release.attributes.publisher` |
+| `operated_by` | 运营商 ↔ 运营了 | `release -> agent` | 在线服务或地区版本的运营主体及运营权移交；配合 `valid_from`/`valid_to`/`region`/`platform`/`channel` 记录区间，主运营商同步填 `Release.attributes.operator` |
 | `directed_by` | 导演 ↔ 执导了 | `work\|content_unit\|expression\|event -> agent` | 总导演、导演/监督、舞台演出；分集演出无专用码时走 `credit_for` |
 | `written_by` | 编剧 ↔ 编写了 | `work\|content_unit\|expression\|event -> agent` | 系列构成、脚本、剧本 |
 | `composed_by` | 作曲者 ↔ 作曲了 | `work\|content_unit\|expression -> agent` | 作曲、剧伴音乐作曲 |
@@ -156,7 +158,7 @@ Track 的 `contents[]` 是实际收录的权威来源：
 | `modeled_by` | 出镜者 ↔ 出镜于 | `work\|content_unit\|expression\|release\|event -> agent` | 写真模特、真人出镜演员 |
 | `narrated_by` | 朗读 / 旁白 ↔ 朗读了 | `work\|content_unit\|expression\|release\|event -> agent` | 有声书朗读、旁白、现场朗读 |
 | `translated_by` | 译者 ↔ 翻译了 | `work\|content_unit\|expression\|release -> agent` | 文本或字幕翻译 |
-| `credit_for` | 参与主体 ↔ 参与记录 | `work\|content_unit\|expression\|release\|event -> agent` | **兜底署名**：仅以上 16 条均不适用时使用（音响监督、美术监督、色彩设计、剪辑、分镜、单集演出、录音/混音工程等），必填 `credit_role` 原文；严禁与专用关系重复建边 |
+| `credit_for` | 参与主体 ↔ 参与记录 | `work\|content_unit\|expression\|release\|event -> agent` | **兜底署名**：仅以上 18 条均不适用时使用（音响监督、美术监督、色彩设计、剪辑、分镜、单集演出、录音/混音工程等），必填 `credit_role` 原文；严禁与专用关系重复建边 |
 
 ### 创作关系组 `creative`（10 条，`acyclic=true`，`participant_slot=peer`）
 

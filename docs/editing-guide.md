@@ -33,7 +33,7 @@ Work 使用作品本身的名称；Release 原样保留发行方为该版使用�
 
 ## 图片与外部编号
 
-使用清晰、完整、有权引用的图片，可补充出处，保持自然比例。图片按保存顺序展示，首张作为封面，其余可按用途标记封底、手册内页、盘面、侧标等；外部地址失效时更新，临时下载地址不用于长期封面。官方图源不自动意味着允许转载，权利不明时留空。
+使用清晰、完整、有权引用的图片，可补充出处，保持自然比例。图片采用追加式保存：首张为当前默认封面，其余按用途标记 `app_icon`（应用图标）、`key_visual`（主视觉）、`logo`（标识）、`cover_art`、`back_cover`、`booklet`、`disc_art`、`obi` 等。作品或发行更换主视觉、封面或图标时，可用编辑器的「归档并替换」关闭旧图片的 `valid_to` 并保留历史资产与出处，不删除旧图；外部地址失效时更新，临时下载地址不用于长期封面。官方图源不自动意味着允许转载，权利不明时留空。
 
 编号保留官方格式，核对所属版次；图书 ISBN 等标识还应核对校验位。可用外部数据库以编辑界面为准，登记数据库不代表支持自动导入。
 
@@ -48,11 +48,11 @@ Work 使用作品本身的名称；Release 原样保留发行方为该版使用�
 | 作品形态 `creation_form` | 单首乐曲作品填 `song`，仅作为曲目被专辑或单曲收录时不得填 `original_album` 或 `single`；单曲、EP、原创专辑、同人专辑、原声集、精选集按实填 `single`、`ep`、`original_album`、`doujin_album`、`soundtrack`、`compilation_album`。同名主打歌与同名单曲/专辑分建不同 `work` |
 | 跨媒体企划与集合 | 跨媒体企划建 `collection` 并设 `collection_type=franchise`（同媒介多作系列用 `series`，选集/丛书用 `anthology`，展会特辑用 `event_catalog`），用 `includes` 归拢旗下的 TV 动画、剧场动画、游戏、漫画、小说与音乐作品 |
 | 内容与复用 | 同一份录音、正文或剪辑被多次发行时共用 Expression；有实质创作差异时才另建表达。商品页曲名与品番只证明本版收录，不证明 SKU 专属录音或独立母版；不得据此填录音版本名。整体与部分表达同属一个 Work，顺序来自表达组合关系 |
-| 发行与盒装 | 版本类别 `edition_type`、发行批次 `edition_batch`、发行渠道 `distribution_channel` 与包装 `packaging` 按正交维度分别填写，出版/发行商写 `Release.attributes.publisher`。盒装编号在盒装 Release，单品编号在各自发行；`subjects` 覆盖实际收录表达所属的全部 Work，正曲用 `track_work` 而非 `supplement` |
+| 作品与地区发行边界 | `Work` 只保留跨地区共用的作品身份、开发商（`developed_by`）与创作署名；每个具有独立发行身份的地区、平台、渠道或版本分别建 `Release`（普通补丁更新、活动更新或仅换图标不拆新 `Release`）。出版/发行商与运营商分别写在对应 `Release`（`publisher` / `operator` 字段及多值带 `[valid_from, valid_to)` 的 `published_by` / `operated_by` 关系），不把单地区代理或运营商挂在 `Work.produced_by`。盒装编号在盒装 Release，单品编号在各自发行；`subjects` 覆盖实际收录表达所属的全部 Work，正曲用 `track_work` 而非 `supplement` |
 | 实际目录 | 分盘、分卷、曲目符合实物或发布记录；定位注明时间、页码或路径的参照范围。盒内附件、渠道赠品与真实载体分开记录 |
-| 原作、制作与兜底署名 | `created_by` **仅限原作者、原案、著作人**，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；动画制作公司（`アニメーション制作`）、出品/制作委员会、制片人、音乐制作人、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）用 `produced_by` 并在 `credit_role` 保留原始职衔；`credit_for` 仅在 16 条专用署名关系均不适用时使用（如音响监督、美术监督、色彩设计、剪辑、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边 |
+| 原作、制作与兜底署名 | `created_by` **仅限原作者、原案、著作人**，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；动画制作公司（`アニメーション制作`）、出品/制作委员会、制片人、音乐制作人、同人社团（`サークル`）、游戏品牌/原作出品方用 `produced_by` 并在 `credit_role` 保留原始职衔；`credit_for` 仅在其余 18 条专用署名关系均不适用时使用（如音响监督、美术监督、色彩设计、剪辑、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边 |
 | 乐队、歌曲与角色署名 | 乐队/组合（`agent_type=group`）演出用 `performed_by`，已知成员通过 `member_of`（个人 -> 团体）关联并在 `credit_role` 写声部/乐器（如 `Vo. & Gt.`）；歌曲作曲、作词用 `composed_by`、`lyricist_of`（通常归 `work`），编曲用 `arranged_by`（通常归录音 `expression`）。虚构角色登场用 `character_in` 配 `character_rank` 番位；同一声优多角色用多条带 `character`、`language` 的 `voiced_by` 表达 |
-| 活动与主体变更 | 跨作品/跨主体的演唱会、巡演、即卖会建顶层 `event`（`recorded_at` / `released_at` 关联现场作品与首发盘），单一作品或发行的发售、重印、停售节点写 `attributes.events[]`。同一主体改名保留原 `agent` 写 `former_names`；母子公司变更用带起止日与 `ended` 的 `subsidiary_of`，独立主体间的收购、合并、拆分、移交用 `succeeded_by`（填 `transition_type`） |
+| 活动、时间线与历史事实 | 跨实体的演唱会、巡演、即卖会或跨平台节点建顶层 `event`（`recorded_at` / `released_at` / `target_ids`），单实体节点写 `attributes.events[]`。九类条目改名用「归档旧名称」写入 `former_names`，随时间变动的动态属性（含发行状态 `release_status`）统一写 `attribute_history`（均用 `[valid_from, valid_to)` 左闭右开区间，不拿数据库修订日期冒充现实事件时间）；母子公司变更用 `subsidiary_of`，独立主体间的收购、合并、拆分、移交用 `succeeded_by`（填 `transition_type`） |
 
 保存多层条目时逐步核对，每一步成功不代表整条发行链完成。后续失败时说明已保存与尚未完成的部分，避免重复创建。
 

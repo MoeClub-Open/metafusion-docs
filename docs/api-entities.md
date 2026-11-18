@@ -144,6 +144,10 @@ GET /api/catalog/entities/:id/identity   # 存活实体与完整历史别名
 GET /api/catalog/entities/:id/links      # 结构、语义关系与字段引用，含两端实体表
 GET /api/catalog/entities/:id/occurrences # 该实体被哪些发行版收录
 GET /api/catalog/entities/:id/revisions  # 修订历史
+GET /api/catalog/entities/:id/timeline   # 统一事件时间线（内嵌事件 + 关联 Event）
+GET /api/catalog/entities/:id/as-of      # 指定时间点的全维度历史状态重建
+GET /api/catalog/entities/:id/compare    # 两个时间点的字段、关系与区间事件对比
+GET /api/catalog/entities/:id/pictures   # 按用途、时间点与发行范围查询当前及历史图片
 ```
 
 - `/links` 的 `items` 是统一关系投影，`entities` 是按 id 索引的可见端点与引用实体（含被查询实体自身），`subject_id` 标出「哪个是自己」
@@ -156,6 +160,20 @@ GET /api/catalog/entities/:id/revisions  # 修订历史
 实体详情包含当前 version，但不是全库事实的无损导出。Track 的 contents 会过滤当前不可见的 Expression；编辑时不要把可见性裁剪后的结果整份覆盖，以免误删历史引用。维护单条收录使用[工作副本的 content 操作](/api-edit#编辑实体与收录)。
 
 已知多条 UUID 需要获取完整结构字段时，使用 `POST /api/catalog/entities/batch`，请求体为 `{"ids":["<uuid>", ...]}`（1–100 个 UUID，超限返回 `400 too_many_ids`，空数组返回 `400 ids_required`）。服务在同一个 repeatable-read 只读事务内返回按 ID 索引的完整实体 `items`（含结构归属、`subjects` 与当前可见 `contents`）、显示封面 `covers` 以及不存在或不可见的 `missing` 数组，避免逐条串行请求。
+
+### 时间线、历史状态重建与历史图片查询
+
+目录把「修订审计时间」（`revisions` / `recorded_at`）与「现实世界生效时间」（`[valid_from, valid_to)` 左闭右开区间）严格分开。以下四个只读端点统一覆盖九类实体：
+
+| 端点 | 查询参数 | 返回摘要 |
+| --- | --- | --- |
+| `GET /api/catalog/entities/:id/timeline` | `from`、`to`（部分日期）、`type`（事件类型，可重复传参）、`region`、`platform`、`release_id` | `{entity_id, definition_etag, items, entities}`：合并实体自身/下属 `Release` 的内嵌 `attributes.events[]` 与关联顶层 `Event` 条目并去重 |
+| `GET /api/catalog/entities/:id/as-of` | `at`（必填，`YYYY` / `YYYY-MM` / `YYYY-MM-DD`）、`region`、`platform`、`release_id` | `{entity_id, kind, at, scope, title, title_status, translations, attributes, attribute_states, external_links, publishers, operators, release_status, cover, app_icon, pictures, releases?, active_relations, unknown_fields, disputed_fields?, recorded_at, entities}` |
+| `GET /api/catalog/entities/:id/compare` | `from`、`to`（均必填）、`region`、`platform`、`release_id` | `{entity_id, from, to, scope, from_snapshot, to_snapshot, field_changes, relation_changes, events_between, entities}` |
+| `GET /api/catalog/entities/:id/pictures` | `role`（如 `app_icon`、`cover_art`、`key_visual`、`logo`）、`at`、`release_id`、`region`、`platform` | `{entity_id, definition_etag, at?, scope, selected_cover?, selected_app_icon?, items}` |
+
+- **不倒填未知过去**：`as-of` 按 `at` + `scope` 匹配 `former_names`、`attribute_history`（覆盖九类实体的全部动态属性，含 `release_status`）、`external_links`、`published_by` / `operated_by` 及全部语义关系与 `pictures[]`。当目标时间早于实体已知起点或历史区间缺失时，对应状态标为 `unknown`（存在重叠冲突或 `date_precision=disputed` 时标为 `disputed`），绝不将当前值或数据库修订时间冒充历史事实。
+- **主图与图标选择规则**：指定 `at` 时优先选取该时间点与适用范围内有效（`valid_from <= at < valid_to`）的对应用途图片，其次回退 `pinned=true` 置顶项，仍无法确认时返回 `status="unknown"`。当主体为 `work` 时，`as-of` 与 `compare` 同时返回聚合视图及每个关联 `release` 的独立历史状态 `releases[]`。
 
 ### 身份解析和统一关系读取
 

@@ -90,14 +90,16 @@ Release：作品 A + 作品 B 盒装
 
 ## 活动与主体沿革
 
-- **双层事件模型**：多主体或多作品共用的演唱会、巡回演出、音乐节、同人即卖会、颁奖礼建立顶层 `event`（`attributes.event_type`），巡演与分场次用 `includes`（`event -> event`）关联，现场录音或映像用 `recorded_at` 指向 `event`，展会或现场首发盘用 `released_at` 指向 `event`；仅属于单一作品、表达或发行版的发售、首播、重印、预售、停售节点，记录在该条目的 `attributes.events[]` 列表中（需要关联顶层活动时填写子字段 `event`）。
-- **主体改名、隶属与承继**：同一法人、乐队或艺人改名保留同一 `agent`，旧名与启用区间填入 `former_names`，休团与复出填入 `activity_periods`；母子公司或厂牌隶属用 `subsidiary_of`（附 `begin_date`/`end_date`/`ended` 记录归属变更），跨独立主体的合并、收购、拆分、权利移交用 `succeeded_by`（前身指向后继，填 `transition_type`）。
+- **作品与地区/渠道发行拆分**：`work` 仅保存作品身份、开发团队（`developed_by`）、创作人员及不依赖特定市场的基础资料，不把仅对某一地区或渠道成立的发行商、运营商挂在 `work.produced_by` 上。每个具有**独立发行身份**的地区、平台、渠道或版本（如日服、国服、国际服、Steam 版、主机实体版）分别建立 `release` 并通过 `subjects[]` 关联 `work`，填写 `country`、`platform`、`distribution_channel`、`channel`、`edition_date` 与 `release_status`；普通补丁更新、常规运营活动或仅更换图标/主视觉**不新建 `release`**。发行商与运营商在 `release` 上分别记录：主发行商/主运营商填 `attributes.publisher` / `attributes.operator`，联合发行或主体更替用带 `[valid_from, valid_to)` 与地区/平台范围的语义关系 `published_by` / `operated_by`（`release -> agent`）。
+- **双层事件模型与统一时间线**：跨多实体的演唱会、巡演、展会、颁奖礼或跨平台重大节点建立顶层 `event`（`attributes.event_type`、`target_ids`、`related_assets`），单一条目的公布、测试、正式发行、版本更新、图标/封面更换、改名、发行商/运营商更替、停服、恢复运营等节点可写内嵌 `attributes.events[]`；两者由服务端统一归入时间线索引，详情页「时间线」标签支持按事件节点跳转、「时光回看」按任意时点重建九类实体的名称、译名、属性、外链、图片、发行/运营主体与关系，以及两日期差异对比。
+- **历史状态重建与追加式图片**：九类实体的曾用名（`former_names`）、动态属性历史（`attribute_history`，含发行状态 `release_status`）、外部链接（`external_links`）、语义关系及图片（`pictures[]`，含 `app_icon` 应用图标、`cover_art`、`key_visual`、`logo`）均采用 `[valid_from, valid_to)` 左闭右开有效区间，并与平台录入时间 `recorded_at` 区分；更换封面或图标时关闭旧记录区间并追加新图，不删除旧资产，无法考证的历史区间显示「未知」而不把现值倒填至过去。
+- **主体改名、隶属与承继**：同一法人、乐队、战队或艺人改名保留同一 `agent`，旧名与启用区间填入 `former_names`，休团与复出填入 `activity_periods`；母子公司或厂牌隶属用 `subsidiary_of`（附 `valid_from`/`valid_to` 或 `begin_date`/`end_date`/`ended` 记录归属变更），跨独立主体的合并、收购、拆分、权利移交用 `succeeded_by`（前身指向后继，填 `transition_type`）。
 
 ## 组成、版本组和署名
 
 - **表达组成**：整体与部分 Expression 属于同一 Work，通过定义中用途为 `expression_composition` 的关系连接；常见种子码为 `expression_part`。
 - **显式版本组**：Release 通过用途为 `release_group` 的关系归到一个 Work 或 Collection；常见种子码为 `edition_of`。共同收录某首歌不等于属于同一版本组。
-- **署名边界（`created_by` / `produced_by` / `credit_for`）**：`created_by` 仅限原作者、原案、著作人，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；动画制作公司（`アニメーション制作`）、制作委员会、制片人、音乐制作人、活动主办、同人社团（`サークル`）、游戏品牌/厂商（`メーカー`）一律用 `produced_by`（原始职衔填 `credit_role`，发行版的出版/发行商优先填 `Release.attributes.publisher`）；`credit_for` 仅在 16 条专用署名关系均不适用时作兜底（如音响监督、美术监督、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边。完整 36 条种子关系见[实体模型与字段](/frbr-model#关系)。
+- **署名边界（`created_by` / `produced_by` / `published_by` / `operated_by` / `credit_for`）**：`created_by` 仅限原作者、原案、著作人，严禁用于动画制作公司、同人社团、游戏厂商或唱片厂牌；游戏/软件研发挂 `work` 的 `developed_by`；动画制作公司（`アニメーション制作`）、制作委员会、制片人、音乐制作人、活动主办、同人社团（`サークル`）、游戏品牌/原作出品方用 `produced_by`（原始职衔填 `credit_role`）；特定地区或渠道的发行商、运营商挂对应 `release`（`publisher` / `operator` 字段及多值带有效期的 `published_by` / `operated_by`），不混入 `work.produced_by`；`credit_for` 仅在其余 18 条专用署名关系均不适用时作兜底（如音响监督、美术监督、分镜、单集演出、录音/混音工程），必填 `credit_role` 原文，严禁与专用关系重复建边。完整 38 条种子关系见[实体模型与字段](/frbr-model#关系)。
 
 同一声优在同一作品里担任不同角色时，用多条带不同 `character` 与 `language` 的 `voiced_by` 关系表达，不重复建人物；虚构角色登场用 `character_in`（`agent -> work|collection|event`）并在 `character_rank` 记录番位。
 

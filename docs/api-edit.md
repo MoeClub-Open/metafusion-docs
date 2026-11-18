@@ -67,7 +67,7 @@ commit 使用 `message` 说明本次修改。来源、查证记录和质量报�
 
 ### 图片与自托管封面
 
-`pictures` 是有序数组，最多 40 张。首项就是封面，服务端不重排；`role`、时间与版本名称不会自动选择封面。更换封面应调整数组顺序。
+`pictures` 是追加式有序数组。首项为当前默认封面，服务端保存时不重排；更换主封面或应用图标时应关闭旧记录的 `valid_to`（或 `usage_period.end`）并追加新记录至前部，不删除旧图片资产。历史回看接口 `/as-of` 与 `/pictures` 按 `[valid_from, valid_to)`、适用范围及 `pinned` 选择对应时点的主图与图标。
 
 ```json
 {
@@ -77,6 +77,9 @@ commit 使用 `message` 说明本次修改。来源、查证记录和质量报�
   "role": "cover_art",
   "taken_at": "2026-10",
   "version_label": {"zh-CN": "2026 年版"},
+  "valid_from": "2026-10-01",
+  "region": "JP",
+  "platform": "iOS / Android",
   "usage_period": {"begin": "2026-10-01"},
   "source": {"kind": "url", "citation": "官方发行页的封面", "url": "https://publisher.example/releases/123"}
 }
@@ -86,21 +89,23 @@ commit 使用 `message` 说明本次修改。来源、查证记录和质量报�
 
 | 字段 | 契约 |
 | --- | --- |
-| `url` | 必填的有效图片 URL；同一实体不能重复使用同一 URL |
+| `url` | 必填的有效图片 URL；同一实体按 `(url, 生效起止, region, platform, channel, release_id)` 判重，同一资产在不同使用期或范围下可分别记录 |
 | `source` | 可选图片出处；存储地址与来源页面分别记录，不因缺来源而阻止提交 |
 | `caption` / `version_label` | 按语言码保存说明 / 图像版本名称；后者不是实体 version |
-| `role` | 可省略；有值时须为 `picture_role` 词项码（默认含 `key_visual`、`cover_art`、`back_cover`、`booklet`、`disc_art`、`obi`、`packaging`、`poster`、`character_portrait`、`person_portrait`、`logo`、`scene_still`，以实例 definitions 为准） |
+| `role` | 可省略；有值时须为 `picture_role` 词项码（默认含 `key_visual`、`cover_art`、`app_icon`、`logo`、`back_cover`、`booklet`、`disc_art`、`obi`、`packaging`、`poster`、`character_portrait`、`person_portrait`、`scene_still`、`event_photo`、`scan`、`screenshot`，以实例 definitions 为准） |
 | `taken_at` | 可省略；允许年、年月、完整日期或 RFC3339 时间，仅作图像时间信息 |
+| `valid_from` / `valid_to` | 可省略；左闭右开有效区间 `[valid_from, valid_to)`，两端同时填写时要求结束不早于开始（允许同日替换闭合）；可配合 `date_precision`、`earliest_date`、`latest_date` 记录考证精度 |
+| `region` / `platform` / `channel` / `release_id` | 可省略；声明图片适用的地区、平台、渠道或关联 `release` UUID，以及可选 `pinned` 手工置顶标记 |
 | `usage_period` | 可省略；填写时 begin/end 至少有一端，支持部分日期，包含两端，结束不能早于开始；可与其他图片使用期重叠 |
-| `asset_id` | 自托管资产的 UUID；外链图可省略。先完成上传，stage 自动验证资产状态与保存者资格并预留私有引用；正式封面绑定由合入后的生命周期同步管理 |
+| `asset_id` | 自托管资产的 UUID；外链图可省略。先完成上传，stage 自动验证资产状态与保存者资格并预留私有引用；正式封面绑定由合入后的生命周期同步管理，历史修订曾引用的资产同样受生命周期保留保护 |
 
-图片校验错误为 `400 too_many_pictures`、`duplicate_picture`、`invalid_picture`、`invalid_picture_time`、`invalid_picture_period`、`invalid_picture_asset`；用途词表不存在或词项非法分别返回 `unknown_vocabulary`、`invalid_term`。自托管上传的完整步骤见[存储上传与下载](/api-storage#自托管封面)。
+图片校验错误为 `400 duplicate_picture`、`invalid_picture`、`invalid_picture_time`、`invalid_picture_period`、`invalid_picture_asset`；用途词表不存在或词项非法分别返回 `unknown_vocabulary`、`invalid_term`。自托管上传的完整步骤见[存储上传与下载](/api-storage#自托管封面)。
 
 自托管图片的 `url` 始终保存 `/api/storage/assets/{asset_id}/content` 的绝对地址。上传不绑定正式实体；新增资产由上传者或当前存储管理员保存到副本，资产须已完成且摘要已验证、未禁发、未回收。副本、PR 和 commit 可用各自上下文的[私有预览地址](/api-storage#副本与-pr-的私有图片预览)展示，不能把预览代理地址写回图片字段。公开绑定或解绑 `cover_image` 返回 `409 catalog_managed_binding`；更换封面统一修改图片并合入。
 
 ### 外部标识
 
-`external_links` 是外部链接数组。每条至少有 `kind`（平台码）与规范化后的 `url`，可选 `external_id`、`role`（`official|primary|secondary|operator`，空表示无角色标签）、`origin`、`source_refs`。「官方」徽标只由 `role=official` 推出。写入前读取 `GET /api/catalog/external-databases`：`category=all` 适用于所有 kind，其余分类必须等于实体的 kind。同一实体 `(kind, url)` 唯一。未知码返回 `400 invalid_external_key: <code>`，分类不匹配返回 `400 invalid_external_category: <code>`，非法链接返回 `400 invalid_external_link` / `invalid_external_id`。
+`external_links` 是外部链接数组。每条至少有 `kind`（平台码）与规范化后的 `url`，可选 `external_id`、`role`（`official|primary|secondary|operator`，空表示无角色标签）、`valid_from`、`valid_to`、`ended`、`date_precision`、`earliest_date`、`latest_date`、`region`、`platform`、`channel`、`release_id`、`origin`、`source_refs`。「官方」徽标只由 `role=official` 推出。写入前读取 `GET /api/catalog/external-databases`：`category=all` 适用于所有 kind，其余分类必须等于实体的 kind。同一实体 `(kind, url)` 唯一。未知码返回 `400 invalid_external_key: <code>`，分类不匹配返回 `400 invalid_external_category: <code>`，非法链接返回 `400 invalid_external_link` / `invalid_external_id`。
 
 `url` 使用绝对 HTTP(S) 地址；无网页的裸编号可使用 `mf://external/<kind>/<经过路径编码的external_id>` 作为展示标识，该值不作为网页链接打开。`000030_external_links` 将旧实体与修订快照中的 `external_ids` 转为数组，并转换对应来源指针；迁移条目标记 `origin="migration"`，不推断角色、不添加来源。来源连接器的候选标识对象不是实体载荷，须核实后转换为数组。相同地址的外链元数据不同，或同平台链接在合并时冲突，均须先人工解决；合并不会静默丢弃其中一方。
 

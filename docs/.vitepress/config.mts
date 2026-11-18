@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pageRedirects } from './redirects.mjs';
+import { pageRedirects } from './redirects';
 import { themeBootScript } from './theme/shared/boot.generated';
 
 // 导航与侧栏的事实来源是每页 frontmatter 的 group / order / title：
